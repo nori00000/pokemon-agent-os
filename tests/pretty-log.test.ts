@@ -124,6 +124,33 @@ describe("pretty log rendering", () => {
     );
   });
 
+  it("summarizes runtime screenshot input instead of dumping image data", () => {
+    const rendered = renderAgentEvent({
+      input: {
+        content: [
+          {
+            text: "Fresh observation.\n\nCurrent mGBA status:\nframe: 15149\ngame: PKMN RED ST DMG-AR",
+            type: "text",
+          },
+          {
+            image: "data:image/png;base64,SECRET_IMAGE",
+            mediaType: "image/png",
+            type: "image",
+          },
+        ],
+        type: "user-message",
+      },
+      placement: "step-end",
+      type: "runtime-input",
+    });
+
+    expect(rendered).toBe(
+      "INJECT step-end · turn prompt · frame 15149 · [status + screenshot + prompt] injected"
+    );
+    expect(rendered).not.toContain("SECRET_IMAGE");
+    expect(rendered).not.toContain("Fresh observation");
+  });
+
   it("makes action tool calls visually obvious", () => {
     expect(
       renderAgentEvent({

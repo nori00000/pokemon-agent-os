@@ -130,6 +130,8 @@ export function renderAgentEvent(
       return line(options, "magenta", "🧠", `reasoning · ${event.text}`);
     case "user-message":
       return renderUserMessage(event, options);
+    case "runtime-input":
+      return renderRuntimeInput(event, options);
     case "tool-call":
       return renderToolCall(event, options);
     case "tool-result":
@@ -214,6 +216,20 @@ function renderUserMessage(
     "👤",
     `user · ${formatContentParts(event.content)}`
   );
+}
+
+function renderRuntimeInput(
+  event: Extract<AgentEvent, { type: "runtime-input" }>,
+  options: RenderOptions
+): string {
+  if (event.input.type === "user-message") {
+    const summary = summarizeInjectedUserMessage(event.input.content);
+    if (summary) {
+      return line(options, "blue", "INJECT", `${event.placement} · ${summary}`);
+    }
+  }
+
+  return line(options, "blue", "INJECT", `${event.placement} · runtime input`);
 }
 
 function renderToolCall(
