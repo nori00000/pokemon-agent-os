@@ -18,6 +18,7 @@ import {
   streamRun,
   streamSupervisedRun,
 } from "../src/runner";
+import type { SupervisorIntervention } from "../src/supervisor";
 import { createMgbaControlPlane } from "../src/tools";
 
 class FakeRun implements AgentRun {
@@ -91,13 +92,13 @@ describe("supervised control tools", () => {
     expect(tools).not.toHaveProperty("mgba_load_state");
   });
 
-  it("normalizes directional movement to duration 12 and settles to start frame plus 48", async () => {
-    const client = new FakeMgbaClient([100, 110, 147, 148]);
-    const interventions: string[] = [];
+  it("normalizes directional movement to duration 12 and settles to start frame plus 200", async () => {
+    const client = new FakeMgbaClient([100, 110, 299, 300]);
+    const interventions: SupervisorIntervention[] = [];
     const tools = createMgbaControlPlane({
       client: client as never,
       onSupervisorIntervention: (intervention) => {
-        interventions.push(intervention.reason);
+        interventions.push(intervention);
       },
     });
 
@@ -110,8 +111,51 @@ describe("supervised control tools", () => {
     expect(client.calls).toContain("hold:Up:12");
     expect(client.calls).not.toContain("hold:Up:90");
     expect(client.calls.filter((call) => call === "status")).toHaveLength(4);
-    expect(interventions).toContain("long-movement-split");
-    expect(interventions).toContain("settle-wait");
+    expect(interventions.map((intervention) => intervention.reason)).toContain(
+      "long-movement-split"
+    );
+    expect(interventions).toContainEqual(
+      expect.objectContaining({
+        polls: 3,
+        reason: "settle-wait",
+        settledFrame: 300,
+        startFrame: 100,
+        targetFrame: 300,
+      })
+    );
+  });
+
+  it("serializes concurrent model-facing controls until settle completes", async () => {
+    const client = new FakeMgbaClient([0, 50, 199, 200, 200]);
+    const tools = createMgbaControlPlane({ client: client as never });
+
+    await Promise.all([
+      executeTool(tools.mgba_hold.execute, { button: "Up", duration: 12 }),
+      executeTool(tools.mgba_hold.execute, { button: "A", duration: 6 }),
+    ]);
+
+    const statusIndexes = client.calls.reduce<number[]>(
+      (indexes, call, index) => {
+        if (call === "status") {
+          indexes.push(index);
+        }
+        return indexes;
+      },
+      []
+    );
+    const secondHoldIndex = client.calls.indexOf("hold:A:6");
+
+    expect(secondHoldIndex).toBeGreaterThan(statusIndexes[3]);
+    expect(client.calls).toEqual([
+      "status",
+      "hold:Up:12",
+      "status",
+      "status",
+      "status",
+      "status",
+      "hold:A:6",
+      "status",
+    ]);
   });
 
   it("normalizes non-directional taps to duration 6", async () => {
@@ -168,6 +212,28 @@ describe("streamSupervisedRun", () => {
     expect(
       events.filter((event) => event.type === "supervisor-intervention")
     ).toHaveLength(2);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        {
+          intervention: expect.objectContaining({
+            blackFrames: 1,
+            blackPixelRatio: 1,
+            polls: 1,
+            reason: "black-frame-wait",
+          }),
+          type: "supervisor-intervention",
+        },
+        {
+          intervention: expect.objectContaining({
+            blackFrames: 2,
+            blackPixelRatio: 1,
+            polls: 2,
+            reason: "black-frame-wait",
+          }),
+          type: "supervisor-intervention",
+        },
+      ])
+    );
   });
 
   it("stops black-frame polling at five screenshots", async () => {
