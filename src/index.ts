@@ -95,7 +95,7 @@ const agent = await Agent.create({
           recentActions,
           stuckMemory: stuckMemory.snapshot(),
           text: `Fresh mGBA observation after continuing step ${stepIndex + 1}.`,
-        }),
+        })
       );
     },
     beforeTurn: async ({ signal }) => {
@@ -107,7 +107,7 @@ const agent = await Agent.create({
           recentActions,
           stuckMemory: stuckMemory.snapshot(),
           text: `Fresh mGBA observation before turn ${turnsRun}. Use it with the current objective prompt to choose the next control action.`,
-        }),
+        })
       );
     },
   },
@@ -138,7 +138,7 @@ while (true) {
       recordRecentAction(event, recentActions);
       prettyLogger.event(event as never);
       fireAndReportViewerWrite(
-        viewerEventRecorder.recordEvent(event, { turn: turnsRun }),
+        viewerEventRecorder.recordEvent(event, { turn: turnsRun })
       );
     },
     run,
@@ -148,7 +148,7 @@ while (true) {
 }
 
 async function recordTurnObservation(
-  observation: MgbaObservation,
+  observation: MgbaObservation
 ): Promise<void> {
   currentObservation = observation;
   stuckMemory.observe(observation, turnsRun);
@@ -179,7 +179,7 @@ function recordRecentAction(event: unknown, recentActions: string[]): void {
 }
 
 function isControlToolCall(
-  event: unknown,
+  event: unknown
 ): event is { input: unknown; toolName: string; type: "tool-call" } {
   return (
     typeof event === "object" &&
@@ -203,13 +203,13 @@ function formatAction(toolName: string, input: unknown): string {
 }
 
 function recordSupervisorIntervention(
-  intervention: SupervisorIntervention,
+  intervention: SupervisorIntervention
 ): void {
   runMetricsTracker.recordSupervisorIntervention(intervention.reason);
   const event = createSupervisorEvent(intervention);
   prettyLogger.event(event as never);
   fireAndReportViewerWrite(
-    viewerEventRecorder.recordEvent(event, { turn: turnsRun }),
+    viewerEventRecorder.recordEvent(event, { turn: turnsRun })
   );
 }
 
