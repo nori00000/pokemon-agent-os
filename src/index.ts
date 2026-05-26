@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { Agent } from "@minpeter/pss-runtime";
+import { Agent, type SessionHandle } from "@minpeter/pss-runtime";
 import { env } from "./env";
 import { startMetricsServer } from "./metrics-server";
 import { MgbaHttpClient } from "./mgba-http";
@@ -15,7 +15,7 @@ import {
   createOptimizedFreshRunTrace,
   updateRunTraceMetadata,
 } from "./run-trace";
-import { createObservedTurnInput, streamSupervisedRun } from "./runner";
+import { createTurnPrompt, streamSupervisedRun } from "./runner";
 import { StuckMemory } from "./stuck-memory";
 import {
   createSupervisorEvent,
@@ -69,6 +69,13 @@ startMetricsServer(tokenUsageTracker, runMetricsTracker, {
   port: env.METRICS_HTTP_PORT,
 });
 
+const recentActions: string[] = [];
+const milestoneTracker = new PokemonMilestoneTracker();
+const stuckMemory = new StuckMemory();
+let currentObservation: MgbaObservation | undefined;
+let session: SessionHandle;
+let turnsRun = 0;
+
 const agent = await Agent.create({
   hooks: {
     afterStep: async ({ result, signal, stepIndex }) => {
@@ -88,7 +95,19 @@ const agent = await Agent.create({
           recentActions,
           stuckMemory: stuckMemory.snapshot(),
           text: `Fresh mGBA observation after continuing step ${stepIndex + 1}.`,
-        })
+        }),
+      );
+    },
+    beforeTurn: async ({ signal }) => {
+      const observation = await captureMgbaObservation(mgbaClient, signal);
+      await recordTurnObservation(observation);
+      await session.steer(
+        createObservedInput({
+          observation,
+          recentActions,
+          stuckMemory: stuckMemory.snapshot(),
+          text: `Fresh mGBA observation before turn ${turnsRun}. Use it with the current objective prompt to choose the next control action.`,
+        }),
       );
     },
   },
@@ -101,47 +120,14 @@ const agent = await Agent.create({
   tools,
 });
 
-const session = agent.session("pokemon-run");
-const recentActions: string[] = [];
-const milestoneTracker = new PokemonMilestoneTracker();
-const stuckMemory = new StuckMemory();
-let turnsRun = 0;
+session = agent.session("pokemon-run");
 
 while (true) {
   turnsRun += 1;
   tokenUsageTracker.startTurn(turnsRun);
+  currentObservation = undefined;
 
-  let currentObservation: MgbaObservation | undefined;
-  const observedInput = await createObservedTurnInput({
-    client: mgbaClient,
-    onObservation: async (observation) => {
-      currentObservation = observation;
-      stuckMemory.observe(observation, turnsRun);
-      runMetricsTracker.recordStuckEvents(stuckMemory.snapshot().stuckEvents);
-      prettyLogger.observationInjection({
-        nextTurn: turnsRun,
-        observation,
-      });
-      await viewerEventRecorder.recordObservation(turnsRun, observation);
-    },
-    recentActions,
-    stuckMemory: stuckMemory.snapshot(),
-    turn: turnsRun,
-  });
-  if (currentObservation) {
-    const milestone = milestoneTracker.observe(currentObservation);
-    if (
-      milestone.furthest &&
-      milestone.furthest !== runTrace.milestoneFurthest
-    ) {
-      runTrace = await updateRunTraceMetadata(runTrace, {
-        milestone: milestone.furthest,
-        milestoneCurrent: milestone.current ?? undefined,
-        milestoneFurthest: milestone.furthest,
-      });
-    }
-  }
-  const run = await session.send(observedInput);
+  const run = await session.send(createTurnPrompt(turnsRun));
   await streamSupervisedRun({
     client: mgbaClient,
     onEvent: (event) => {
@@ -152,13 +138,35 @@ while (true) {
       recordRecentAction(event, recentActions);
       prettyLogger.event(event as never);
       fireAndReportViewerWrite(
-        viewerEventRecorder.recordEvent(event, { turn: turnsRun })
+        viewerEventRecorder.recordEvent(event, { turn: turnsRun }),
       );
     },
     run,
   });
   await tokenUsageTracker.endTurn();
   await persistRunMetricsMetadata();
+}
+
+async function recordTurnObservation(
+  observation: MgbaObservation,
+): Promise<void> {
+  currentObservation = observation;
+  stuckMemory.observe(observation, turnsRun);
+  runMetricsTracker.recordStuckEvents(stuckMemory.snapshot().stuckEvents);
+  prettyLogger.observationInjection({
+    nextTurn: turnsRun,
+    observation,
+  });
+  await viewerEventRecorder.recordObservation(turnsRun, observation);
+
+  const milestone = milestoneTracker.observe(observation);
+  if (milestone.furthest && milestone.furthest !== runTrace.milestoneFurthest) {
+    runTrace = await updateRunTraceMetadata(runTrace, {
+      milestone: milestone.furthest,
+      milestoneCurrent: milestone.current ?? undefined,
+      milestoneFurthest: milestone.furthest,
+    });
+  }
 }
 
 function recordRecentAction(event: unknown, recentActions: string[]): void {
@@ -171,7 +179,7 @@ function recordRecentAction(event: unknown, recentActions: string[]): void {
 }
 
 function isControlToolCall(
-  event: unknown
+  event: unknown,
 ): event is { input: unknown; toolName: string; type: "tool-call" } {
   return (
     typeof event === "object" &&
@@ -195,13 +203,13 @@ function formatAction(toolName: string, input: unknown): string {
 }
 
 function recordSupervisorIntervention(
-  intervention: SupervisorIntervention
+  intervention: SupervisorIntervention,
 ): void {
   runMetricsTracker.recordSupervisorIntervention(intervention.reason);
   const event = createSupervisorEvent(intervention);
   prettyLogger.event(event as never);
   fireAndReportViewerWrite(
-    viewerEventRecorder.recordEvent(event, { turn: turnsRun })
+    viewerEventRecorder.recordEvent(event, { turn: turnsRun }),
   );
 }
 

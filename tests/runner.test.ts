@@ -4,6 +4,7 @@ import type {
   AgentEvent,
   AgentRun,
   RuntimeLlmOutput,
+  SessionHandle,
 } from "@minpeter/pss-runtime";
 import { Agent } from "@minpeter/pss-runtime";
 import type { ModelMessage } from "ai";
@@ -363,6 +364,86 @@ describe("streamRun", () => {
 });
 
 describe("runtime steering", () => {
+  it("steers multipart observation input at turn-start before the first model snapshot", async () => {
+    const calls: ModelMessage[][] = [];
+    const llm = vi.fn(({ history }) => {
+      calls.push([...history]);
+      return Promise.resolve([
+        { role: "assistant", content: [{ type: "text", text: "done" }] },
+      ] satisfies RuntimeLlmOutput);
+    });
+    let session: SessionHandle;
+    const agent = await Agent.create({
+      hooks: {
+        beforeTurn: async () => {
+          await session.steer([
+            { text: "turn-start observation", type: "text" },
+            {
+              image: "data:image/png;base64,iVBORw0KGgo=",
+              mediaType: "image/png",
+              type: "image",
+            },
+          ]);
+        },
+      },
+      llm,
+    });
+    session = agent.session("test-before-turn");
+    const run = await session.send("start prompt");
+    const events: AgentEvent[] = [];
+
+    for await (const event of run.stream()) {
+      events.push(event);
+    }
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        { text: "start prompt", type: "user-text" },
+        expect.objectContaining({
+          input: expect.objectContaining({
+            content: [
+              expect.objectContaining({
+                text: "turn-start observation",
+                type: "text",
+              }),
+              expect.objectContaining({
+                image: "data:image/png;base64,iVBORw0KGgo=",
+                mediaType: "image/png",
+                type: "image",
+              }),
+            ],
+            type: "user-message",
+          }),
+          placement: "turn-start",
+          type: "runtime-input",
+        }),
+      ])
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContainEqual(
+      expect.objectContaining({
+        content: "start prompt",
+        role: "user",
+      })
+    );
+    expect(calls[0]).toContainEqual(
+      expect.objectContaining({
+        content: [
+          expect.objectContaining({
+            text: "turn-start observation",
+            type: "text",
+          }),
+          expect.objectContaining({
+            data: "data:image/png;base64,iVBORw0KGgo=",
+            mediaType: "image/png",
+            type: "file",
+          }),
+        ],
+        role: "user",
+      })
+    );
+  });
+
   it("steers multipart screenshot input into the active run after step-end", async () => {
     const calls: ModelMessage[][] = [];
     const llm = vi.fn(({ history }) => {
