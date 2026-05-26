@@ -4,7 +4,11 @@ import { createReasoningLlm } from "./agent-llm";
 import { env } from "./env";
 import { startMetricsServer } from "./metrics-server";
 import { MgbaHttpClient } from "./mgba-http";
-import type { MgbaObservation } from "./observation";
+import {
+  captureMgbaObservation,
+  createObservedInput,
+  type MgbaObservation,
+} from "./observation";
 import { PokemonMilestoneTracker } from "./pokemon-milestones";
 import { createPrettyLogger } from "./pretty-log";
 import { RunMetricsTracker } from "./run-metrics";
@@ -14,6 +18,11 @@ import {
 } from "./run-trace";
 import { createObservedTurnInput, streamSupervisedRun } from "./runner";
 import { StuckMemory } from "./stuck-memory";
+import {
+  createSupervisorEvent,
+  type SupervisorIntervention,
+  waitThroughBlackFrames,
+} from "./supervisor";
 import { createTrackedModel, TokenUsageTracker } from "./token-usage";
 import { createMgbaControlPlane, describeMgbaControlPlane } from "./tools";
 import { createViewerEventRecorder } from "./viewer-recorder";
@@ -37,17 +46,7 @@ const instructions = [
 const mgbaClient = new MgbaHttpClient({ baseUrl: env.MGBA_HTTP_BASE_URL });
 const tools = createMgbaControlPlane({
   client: mgbaClient,
-  onSupervisorIntervention: (intervention) => {
-    runMetricsTracker.recordSupervisorIntervention(intervention.reason);
-    const event = {
-      intervention,
-      type: "supervisor-intervention",
-    };
-    prettyLogger.event(event as never);
-    fireAndReportViewerWrite(
-      viewerEventRecorder.recordEvent(event, { turn: turnsRun })
-    );
-  },
+  onSupervisorIntervention: recordSupervisorIntervention,
 });
 let runTrace = await createOptimizedFreshRunTrace();
 const viewerEventRecorder = createViewerEventRecorder({ trace: runTrace });
@@ -72,6 +71,28 @@ startMetricsServer(tokenUsageTracker, runMetricsTracker, {
 });
 
 const agent = await Agent.create({
+  hooks: {
+    afterStep: async ({ result, signal, stepIndex }) => {
+      if (result !== "continue") {
+        return;
+      }
+
+      await waitThroughBlackFrames({
+        client: mgbaClient,
+        onIntervention: recordSupervisorIntervention,
+        signal,
+      });
+      const observation = await captureMgbaObservation(mgbaClient, signal);
+      await session.steer(
+        createObservedInput({
+          observation,
+          recentActions,
+          stuckMemory: stuckMemory.snapshot(),
+          text: `Fresh mGBA observation after continuing step ${stepIndex + 1}.`,
+        })
+      );
+    },
+  },
   llm: createReasoningLlm({
     instructions,
     model: createTrackedModel({
@@ -174,6 +195,17 @@ function isControlToolCall(
 
 function formatAction(toolName: string, input: unknown): string {
   return `${toolName.replace("mgba_", "")}: ${JSON.stringify(input)}`;
+}
+
+function recordSupervisorIntervention(
+  intervention: SupervisorIntervention
+): void {
+  runMetricsTracker.recordSupervisorIntervention(intervention.reason);
+  const event = createSupervisorEvent(intervention);
+  prettyLogger.event(event as never);
+  fireAndReportViewerWrite(
+    viewerEventRecorder.recordEvent(event, { turn: turnsRun })
+  );
 }
 
 async function persistRunMetricsMetadata(): Promise<void> {

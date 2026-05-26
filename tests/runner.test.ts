@@ -5,6 +5,7 @@ import type {
   AgentRun,
   RuntimeLlmOutput,
 } from "@minpeter/pss-runtime";
+import { Agent } from "@minpeter/pss-runtime";
 import type { generateText, ModelMessage } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import { createReasoningLlm } from "../src/agent-llm";
@@ -365,6 +366,88 @@ describe("streamRun", () => {
 });
 
 describe("createReasoningLlm retry", () => {
+  it("requires a tool call for the first decision request", async () => {
+    const responseMessages = [
+      { role: "assistant", content: [{ type: "text", text: "ok" }] },
+    ] satisfies RuntimeLlmOutput;
+    const generateTextImpl = vi.fn(() =>
+      Promise.resolve({ responseMessages })
+    ) as unknown as typeof generateText;
+    const llm = createReasoningLlm({
+      generateTextImpl,
+      instructions: "test",
+      model: {} as never,
+      reasoning: "provider-default",
+      tools: {},
+    });
+
+    await llm({ history: [], signal: new AbortController().signal });
+
+    expect(generateTextImpl).toHaveBeenCalledWith(
+      expect.objectContaining({ toolChoice: "required" })
+    );
+  });
+
+  it("allows completion after a tool-result continuation request", async () => {
+    const responseMessages = [
+      { role: "assistant", content: [{ type: "text", text: "done" }] },
+    ] satisfies RuntimeLlmOutput;
+    const generateTextImpl = vi.fn(() =>
+      Promise.resolve({ responseMessages })
+    ) as unknown as typeof generateText;
+    const llm = createReasoningLlm({
+      generateTextImpl,
+      instructions: "test",
+      model: {} as never,
+      reasoning: "provider-default",
+      tools: {},
+    });
+    const history = [
+      {
+        role: "tool",
+        content: [],
+      },
+    ] satisfies ModelMessage[];
+
+    await llm({ history, signal: new AbortController().signal });
+
+    expect(generateTextImpl).toHaveBeenCalledWith(
+      expect.objectContaining({ toolChoice: "auto" })
+    );
+  });
+
+  it("allows completion after a steered observation follows a tool result", async () => {
+    const responseMessages = [
+      { role: "assistant", content: [{ type: "text", text: "done" }] },
+    ] satisfies RuntimeLlmOutput;
+    const generateTextImpl = vi.fn(() =>
+      Promise.resolve({ responseMessages })
+    ) as unknown as typeof generateText;
+    const llm = createReasoningLlm({
+      generateTextImpl,
+      instructions: "test",
+      model: {} as never,
+      reasoning: "provider-default",
+      tools: {},
+    });
+    const history = [
+      {
+        role: "tool",
+        content: [],
+      },
+      {
+        role: "user",
+        content: [{ type: "text", text: "fresh after-step observation" }],
+      },
+    ] satisfies ModelMessage[];
+
+    await llm({ history, signal: new AbortController().signal });
+
+    expect(generateTextImpl).toHaveBeenCalledWith(
+      expect.objectContaining({ toolChoice: "auto" })
+    );
+  });
+
   it("retries the same observation twice for transient failures and succeeds on the third attempt", async () => {
     const history = [
       { role: "user", content: "same observation" },
@@ -416,5 +499,94 @@ describe("createReasoningLlm retry", () => {
       llm({ history: [], signal: new AbortController().signal })
     ).rejects.toBe(error);
     expect(generateTextImpl).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runtime steering", () => {
+  it("steers multipart screenshot input into the active run after step-end", async () => {
+    const calls: ModelMessage[][] = [];
+    const llm = vi.fn(({ history }) => {
+      calls.push([...history]);
+      if (calls.length === 1) {
+        return Promise.resolve([
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool-call",
+                toolCallId: "call-1",
+                toolName: "mgba_tap",
+                input: { button: "A" },
+              },
+            ],
+          },
+        ] satisfies RuntimeLlmOutput);
+      }
+
+      return Promise.resolve([
+        { role: "assistant", content: [{ type: "text", text: "done" }] },
+      ] satisfies RuntimeLlmOutput);
+    });
+    const agent = await Agent.create({ llm });
+    const session = agent.session("test-steer");
+    const run = await session.send("start");
+    const events: AgentEvent[] = [];
+    let steered = false;
+
+    for await (const event of run.stream()) {
+      events.push(event);
+      if (event.type === "step-end" && !steered) {
+        steered = true;
+        await session.steer([
+          { text: "after step screenshot", type: "text" },
+          {
+            image: "data:image/png;base64,iVBORw0KGgo=",
+            mediaType: "image/png",
+            type: "image",
+          },
+        ]);
+      }
+    }
+
+    expect(steered).toBe(true);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          input: expect.objectContaining({
+            content: [
+              expect.objectContaining({
+                text: "after step screenshot",
+                type: "text",
+              }),
+              expect.objectContaining({
+                image: "data:image/png;base64,iVBORw0KGgo=",
+                mediaType: "image/png",
+                type: "image",
+              }),
+            ],
+            type: "user-message",
+          }),
+          placement: "step-end",
+          type: "runtime-input",
+        }),
+      ])
+    );
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContainEqual(
+      expect.objectContaining({
+        content: [
+          expect.objectContaining({
+            text: "after step screenshot",
+            type: "text",
+          }),
+          expect.objectContaining({
+            data: "data:image/png;base64,iVBORw0KGgo=",
+            mediaType: "image/png",
+            type: "file",
+          }),
+        ],
+        role: "user",
+      })
+    );
   });
 });

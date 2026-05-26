@@ -1,5 +1,11 @@
 import type { RuntimeLlm } from "@minpeter/pss-runtime";
-import { generateText, type LanguageModel, type ToolSet } from "ai";
+import {
+  generateText,
+  type LanguageModel,
+  type ModelMessage,
+  type ToolChoice,
+  type ToolSet,
+} from "ai";
 
 const LLM_MAX_ATTEMPTS = 3;
 
@@ -30,14 +36,18 @@ export function createReasoningLlm({
   tools,
 }: CreateReasoningLlmOptions): RuntimeLlm {
   return async ({ history, signal }) => {
+    const messages = [...history];
+    const toolChoice = createToolChoice(history);
+
     for (let attempt = 1; attempt <= LLM_MAX_ATTEMPTS; attempt += 1) {
       try {
         const { responseMessages } = await generateTextImpl({
           abortSignal: signal,
           instructions,
-          messages: [...history],
+          messages,
           model,
           reasoning,
+          toolChoice,
           tools,
         });
 
@@ -86,6 +96,18 @@ export function isTransientLlmError(error: unknown): boolean {
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createToolChoice(
+  history: readonly ModelMessage[]
+): ToolChoice<ToolSet> {
+  const lastHistoryMessage = history.at(-1);
+  const previousHistoryMessage = history.at(-2);
+  return lastHistoryMessage?.role === "tool" ||
+    (lastHistoryMessage?.role === "user" &&
+      previousHistoryMessage?.role === "tool")
+    ? "auto"
+    : "required";
 }
 
 function isAbortError(error: unknown): boolean {
