@@ -68,8 +68,6 @@ marker. Stop the process with `Ctrl-C` when the experiment window ends.
 
 The model can use these tools:
 
-- `mgba_status`
-- `mgba_screenshot`
 - `mgba_tap`
 - `mgba_tap_many`
 - `mgba_hold`

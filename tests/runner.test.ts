@@ -81,8 +81,6 @@ describe("supervised control tools", () => {
       "mgba_hold",
       "mgba_hold_many",
       "mgba_release",
-      "mgba_screenshot",
-      "mgba_status",
       "mgba_tap",
       "mgba_tap_many",
     ]);
