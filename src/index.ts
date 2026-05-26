@@ -8,6 +8,7 @@ import {
   createObservedInput,
   type MgbaObservation,
 } from "./observation";
+import { ObservationBookkeeping } from "./observation-bookkeeping";
 import { PokemonMilestoneTracker } from "./pokemon-milestones";
 import { createPrettyLogger } from "./pretty-log";
 import { RunMetricsTracker } from "./run-metrics";
@@ -72,7 +73,10 @@ startMetricsServer(tokenUsageTracker, runMetricsTracker, {
 const recentActions: string[] = [];
 const milestoneTracker = new PokemonMilestoneTracker();
 const stuckMemory = new StuckMemory();
-let currentObservation: MgbaObservation | undefined;
+const observationBookkeeping = new ObservationBookkeeping({
+  runMetricsTracker,
+  stuckMemory,
+});
 let session: SessionHandle;
 let turnsRun = 0;
 
@@ -89,6 +93,7 @@ const agent = await Agent.create({
         signal,
       });
       const observation = await captureMgbaObservation(mgbaClient, signal);
+      observationBookkeeping.promoteObservation(observation, turnsRun);
       await session.steer(
         createObservedInput({
           observation,
@@ -125,16 +130,14 @@ session = agent.session("pokemon-run");
 while (true) {
   turnsRun += 1;
   tokenUsageTracker.startTurn(turnsRun);
-  currentObservation = undefined;
+  observationBookkeeping.clearCurrentObservation();
 
   const run = await session.send(createTurnPrompt(turnsRun));
   await streamSupervisedRun({
     client: mgbaClient,
     onEvent: (event) => {
       runMetricsTracker.recordEvent(event);
-      if (currentObservation && event.type === "tool-call") {
-        stuckMemory.recordEvent(event, currentObservation, turnsRun);
-      }
+      observationBookkeeping.recordEvent(event, turnsRun);
       recordRecentAction(event, recentActions);
       prettyLogger.event(event as never);
       fireAndReportViewerWrite(
@@ -150,9 +153,7 @@ while (true) {
 async function recordTurnObservation(
   observation: MgbaObservation
 ): Promise<void> {
-  currentObservation = observation;
-  stuckMemory.observe(observation, turnsRun);
-  runMetricsTracker.recordStuckEvents(stuckMemory.snapshot().stuckEvents);
+  observationBookkeeping.promoteObservation(observation, turnsRun);
   prettyLogger.observationInjection({
     nextTurn: turnsRun,
     observation,
