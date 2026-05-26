@@ -388,7 +388,7 @@ describe("createReasoningLlm retry", () => {
     );
   });
 
-  it("allows completion after a tool-result continuation request", async () => {
+  it("requires a tool call after a tool-result continuation request", async () => {
     const responseMessages = [
       { role: "assistant", content: [{ type: "text", text: "done" }] },
     ] satisfies RuntimeLlmOutput;
@@ -412,11 +412,11 @@ describe("createReasoningLlm retry", () => {
     await llm({ history, signal: new AbortController().signal });
 
     expect(generateTextImpl).toHaveBeenCalledWith(
-      expect.objectContaining({ toolChoice: "auto" })
+      expect.objectContaining({ toolChoice: "required" })
     );
   });
 
-  it("allows completion after a steered observation follows a tool result", async () => {
+  it("requires a tool call after a steered observation follows a tool result", async () => {
     const responseMessages = [
       { role: "assistant", content: [{ type: "text", text: "done" }] },
     ] satisfies RuntimeLlmOutput;
@@ -444,7 +444,7 @@ describe("createReasoningLlm retry", () => {
     await llm({ history, signal: new AbortController().signal });
 
     expect(generateTextImpl).toHaveBeenCalledWith(
-      expect.objectContaining({ toolChoice: "auto" })
+      expect.objectContaining({ toolChoice: "required" })
     );
   });
 
