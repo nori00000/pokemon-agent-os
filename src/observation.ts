@@ -6,8 +6,8 @@ import {
   readPokemonStateObservation,
 } from "./pokemon-state";
 import { readOptimizedGameBoyScreenshotBase64 } from "./screenshot-image";
+import { createScreenshotPath } from "./screenshot-path";
 import { formatStuckMemory, type StuckMemorySnapshot } from "./stuck-memory";
-import { createScreenshotPath } from "./tools/screenshot";
 
 export type ObservedAgentInput = readonly UserMessageContentPart[];
 

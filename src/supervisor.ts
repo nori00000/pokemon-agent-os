@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { MGBA_BUTTONS, type MgbaButton, type MgbaStatus } from "./mgba-http";
 import { sampleGameBoyBlackFrame } from "./screenshot-image";
-import { createScreenshotPath } from "./tools/screenshot";
+import { createScreenshotPath } from "./screenshot-path";
 
 export const DIRECTIONAL_HOLD_DURATION = 12;
 export const NON_DIRECTIONAL_TAP_DURATION = 6;
