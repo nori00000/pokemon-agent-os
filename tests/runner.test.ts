@@ -6,9 +6,8 @@ import type {
   RuntimeLlmOutput,
 } from "@minpeter/pss-runtime";
 import { Agent } from "@minpeter/pss-runtime";
-import type { generateText, ModelMessage } from "ai";
+import type { ModelMessage } from "ai";
 import { describe, expect, it, vi } from "vitest";
-import { createReasoningLlm } from "../src/agent-llm";
 import type { MgbaButton, MgbaStatus } from "../src/mgba-http";
 import {
   createContinuationPrompt,
@@ -362,143 +361,6 @@ describe("streamRun", () => {
     });
 
     expect(forwarded).toEqual(events);
-  });
-});
-
-describe("createReasoningLlm retry", () => {
-  it("requires a tool call for the first decision request", async () => {
-    const responseMessages = [
-      { role: "assistant", content: [{ type: "text", text: "ok" }] },
-    ] satisfies RuntimeLlmOutput;
-    const generateTextImpl = vi.fn(() =>
-      Promise.resolve({ responseMessages })
-    ) as unknown as typeof generateText;
-    const llm = createReasoningLlm({
-      generateTextImpl,
-      instructions: "test",
-      model: {} as never,
-      reasoning: "provider-default",
-      tools: {},
-    });
-
-    await llm({ history: [], signal: new AbortController().signal });
-
-    expect(generateTextImpl).toHaveBeenCalledWith(
-      expect.objectContaining({ toolChoice: "required" })
-    );
-  });
-
-  it("requires a tool call after a tool-result continuation request", async () => {
-    const responseMessages = [
-      { role: "assistant", content: [{ type: "text", text: "done" }] },
-    ] satisfies RuntimeLlmOutput;
-    const generateTextImpl = vi.fn(() =>
-      Promise.resolve({ responseMessages })
-    ) as unknown as typeof generateText;
-    const llm = createReasoningLlm({
-      generateTextImpl,
-      instructions: "test",
-      model: {} as never,
-      reasoning: "provider-default",
-      tools: {},
-    });
-    const history = [
-      {
-        role: "tool",
-        content: [],
-      },
-    ] satisfies ModelMessage[];
-
-    await llm({ history, signal: new AbortController().signal });
-
-    expect(generateTextImpl).toHaveBeenCalledWith(
-      expect.objectContaining({ toolChoice: "required" })
-    );
-  });
-
-  it("requires a tool call after a steered observation follows a tool result", async () => {
-    const responseMessages = [
-      { role: "assistant", content: [{ type: "text", text: "done" }] },
-    ] satisfies RuntimeLlmOutput;
-    const generateTextImpl = vi.fn(() =>
-      Promise.resolve({ responseMessages })
-    ) as unknown as typeof generateText;
-    const llm = createReasoningLlm({
-      generateTextImpl,
-      instructions: "test",
-      model: {} as never,
-      reasoning: "provider-default",
-      tools: {},
-    });
-    const history = [
-      {
-        role: "tool",
-        content: [],
-      },
-      {
-        role: "user",
-        content: [{ type: "text", text: "fresh after-step observation" }],
-      },
-    ] satisfies ModelMessage[];
-
-    await llm({ history, signal: new AbortController().signal });
-
-    expect(generateTextImpl).toHaveBeenCalledWith(
-      expect.objectContaining({ toolChoice: "required" })
-    );
-  });
-
-  it("retries the same observation twice for transient failures and succeeds on the third attempt", async () => {
-    const history = [
-      { role: "user", content: "same observation" },
-    ] satisfies ModelMessage[];
-    const calls: ModelMessage[][] = [];
-    const responseMessages = [
-      { role: "assistant", content: [{ type: "text", text: "ok" }] },
-    ] satisfies RuntimeLlmOutput;
-    const generateTextImpl = vi.fn(({ messages }) => {
-      calls.push(messages);
-      if (calls.length < 3) {
-        return Promise.reject(
-          Object.assign(new Error("provider overloaded"), { status: 503 })
-        );
-      }
-      return Promise.resolve({ responseMessages });
-    }) as unknown as typeof generateText;
-    const llm = createReasoningLlm({
-      generateTextImpl,
-      instructions: "test",
-      model: {} as never,
-      reasoning: "provider-default",
-      sleep: async () => undefined,
-      tools: {},
-    });
-
-    await expect(
-      llm({ history, signal: new AbortController().signal })
-    ).resolves.toBe(responseMessages);
-    expect(generateTextImpl).toHaveBeenCalledTimes(3);
-    expect(calls).toEqual([history, history, history]);
-  });
-
-  it("fails fast for non-retryable errors", async () => {
-    const error = Object.assign(new Error("bad request"), { status: 400 });
-    const generateTextImpl = vi.fn(() =>
-      Promise.reject(error)
-    ) as unknown as typeof generateText;
-    const llm = createReasoningLlm({
-      generateTextImpl,
-      instructions: "test",
-      model: {} as never,
-      reasoning: "provider-default",
-      sleep: async () => undefined,
-      tools: {},
-    });
-
-    await expect(
-      llm({ history: [], signal: new AbortController().signal })
-    ).rejects.toBe(error);
-    expect(generateTextImpl).toHaveBeenCalledOnce();
   });
 });
 

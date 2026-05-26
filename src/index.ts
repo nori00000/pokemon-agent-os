@@ -1,6 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { Agent } from "@minpeter/pss-runtime";
-import { createReasoningLlm } from "./agent-llm";
 import { env } from "./env";
 import { startMetricsServer } from "./metrics-server";
 import { MgbaHttpClient } from "./mgba-http";
@@ -93,15 +92,13 @@ const agent = await Agent.create({
       );
     },
   },
-  llm: createReasoningLlm({
-    instructions,
-    model: createTrackedModel({
-      model: provider(env.AI_MODEL),
-      tracker: tokenUsageTracker,
-    }),
-    reasoning: env.AI_REASONING,
-    tools,
+  instructions,
+  model: createTrackedModel({
+    model: provider(env.AI_MODEL),
+    tracker: tokenUsageTracker,
   }),
+  toolChoice: "required",
+  tools,
 });
 
 const session = agent.session("pokemon-run");
