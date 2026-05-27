@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.0-canary.48",
-    "@minpeter/pss-runtime": "^0.0.6",
+    "@minpeter/pss-runtime": "^0.0.8",
     "@t3-oss/env-core": "^0.13.11",
     "ai": "7.0.0-canary.142",
     "dotenv": "17.4.2",

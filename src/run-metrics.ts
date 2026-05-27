@@ -140,6 +140,9 @@ export class RunMetricsTracker {
       case "tool-result":
         this.#recordToolResult(event, now);
         return;
+      case "runtime-input":
+        this.#recordRuntimeInput(event);
+        return;
       default:
         return;
     }
@@ -336,6 +339,22 @@ export class RunMetricsTracker {
       return;
     }
 
+    this.#recordScreenData(data);
+  }
+
+  #recordRuntimeInput(
+    event: Extract<AgentEvent, { type: "runtime-input" }>
+  ): void {
+    const data = extractObservedRuntimeInputScreenshotData(event.input);
+    if (!data) {
+      return;
+    }
+
+    this.#currentTurnHadObservation = true;
+    this.#recordScreenData(data);
+  }
+
+  #recordScreenData(data: string): void {
     const hash = createHash("sha256").update(data).digest("hex");
     this.#screenHashes.add(hash);
     if (this.#lastScreenHash && this.#lastScreenHash !== hash) {
@@ -379,6 +398,24 @@ function extractScreenshotData(output: unknown): string | undefined {
   }
   const data = (value as { data?: unknown }).data;
   return typeof data === "string" ? data : undefined;
+}
+
+function extractObservedRuntimeInputScreenshotData(
+  input: Extract<AgentEvent, { type: "runtime-input" }>["input"]
+): string | undefined {
+  if (input.type !== "user-message") {
+    return;
+  }
+
+  const hasObservedStatus = input.content.some(
+    (part) => part.type === "text" && part.text.includes("Current mGBA status:")
+  );
+  if (!hasObservedStatus) {
+    return;
+  }
+
+  const image = input.content.find((part) => part.type === "image");
+  return image?.image;
 }
 
 function isToolError(output: unknown): boolean {

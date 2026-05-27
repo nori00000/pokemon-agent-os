@@ -30,7 +30,6 @@ MGBA_HTTP_BASE_URL=http://127.0.0.1:5000
 AI_BASE_URL=https://codex.nekos.me/v1
 AI_API_KEY=
 AI_MODEL=gpt-5.5
-AI_REASONING=medium
 METRICS_HTTP_HOST=0.0.0.0
 METRICS_HTTP_PORT=9464
 ```
@@ -69,8 +68,6 @@ marker. Stop the process with `Ctrl-C` when the experiment window ends.
 
 The model can use these tools:
 
-- `mgba_status`
-- `mgba_screenshot`
 - `mgba_tap`
 - `mgba_tap_many`
 - `mgba_hold`
@@ -218,8 +215,14 @@ stuck behavior, action entropy, tool reliability, or ROM identity gets worse.
 ## Runtime Boundary
 
 Task 9 recorded `NO_RUNTIME_CHANGE` in `.omo/evidence/task-9-runtime-gate.md`.
-No `pss-next` branch, PR, runtime release, dependency update, or unpublished
-local runtime dependency is needed for the current harness.
+That remains the default boundary: do not move harness-specific behavior into
+`@minpeter/pss-runtime` without separate cross-harness evidence.
+
+Exception: PR 39 updates this harness to published `@minpeter/pss-runtime@0.0.8`
+to use the released `toolChoice` and `session.steer(...)` APIs. The implementation
+stays local to this repository: the runtime package source is not modified, and
+after-step screenshots are steered into the active session before the next model
+step.
 
 Only move work into `@minpeter/pss-runtime` after multiple runs prove the same
 need outside this Pokemon/mGBA harness and the evidence names the affected

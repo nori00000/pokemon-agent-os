@@ -6,8 +6,8 @@ import {
   readPokemonStateObservation,
 } from "./pokemon-state";
 import { readOptimizedGameBoyScreenshotBase64 } from "./screenshot-image";
+import { createScreenshotPath } from "./screenshot-path";
 import { formatStuckMemory, type StuckMemorySnapshot } from "./stuck-memory";
-import { createScreenshotPath } from "./tools/screenshot";
 
 export type ObservedAgentInput = readonly UserMessageContentPart[];
 
@@ -59,7 +59,12 @@ export function createObservedInput({
 }): ObservedAgentInput {
   return [
     {
-      text: `${text}\n\nCurrent mGBA status:\n${formatStatus(observation.status)}${formatState(observation.state)}${formatRecentActions(recentActions)}${formatStuckMemory(stuckMemory)}\n\nCurrent screenshot: attached image below. Red grid lines are movement guide lines marking 16x16 Game Boy movement-cell boundaries. Treat the red grid as movement guide lines. First distinguish blocked cells, open walkable cells, and interactable-looking objects. In indoor scenes, solid black areas/borders/void, walls, furniture, and counters are blocked; visible floor tiles are walkable unless occupied. However, if a black/dark tile looks like a doorway, carpet, threshold, stairs, mat, path marker, or other movement-guiding feature, approach or test it once as a possible transition/exit. Then either move through open floor to explore unseen areas or face an object and press A to interact. Avoid repeating recent actions that did not visibly change progress.`,
+      text: createObservedText({
+        observation,
+        recentActions,
+        stuckMemory,
+        text,
+      }),
       type: "text",
     },
     {
@@ -68,6 +73,15 @@ export function createObservedInput({
       type: "image",
     },
   ] satisfies ObservedAgentInput;
+}
+
+function createObservedText({
+  observation,
+  recentActions = [],
+  stuckMemory,
+  text,
+}: Parameters<typeof createObservedInput>[0]): string {
+  return `${text}\n\nCurrent mGBA status:\n${formatStatus(observation.status)}${formatState(observation.state)}${formatRecentActions(recentActions)}${formatStuckMemory(stuckMemory)}\n\nCurrent screenshot: attached image below. Red grid lines are movement guide lines marking 16x16 Game Boy movement-cell boundaries. Treat the red grid as movement guide lines. First distinguish blocked cells, open walkable cells, and interactable-looking objects. In indoor scenes, solid black areas/borders/void, walls, furniture, and counters are blocked; visible floor tiles are walkable unless occupied. However, if a black/dark tile looks like a doorway, carpet, threshold, stairs, mat, path marker, or other movement-guiding feature, approach or test it once as a possible transition/exit. Then either move through open floor to explore unseen areas or face an object and press A to interact. Avoid repeating recent actions that did not visibly change progress.`;
 }
 
 export function formatStatus(status: MgbaStatus): string {

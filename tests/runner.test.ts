@@ -4,10 +4,11 @@ import type {
   AgentEvent,
   AgentRun,
   RuntimeLlmOutput,
+  SessionHandle,
 } from "@minpeter/pss-runtime";
-import type { generateText, ModelMessage } from "ai";
+import { Agent } from "@minpeter/pss-runtime";
+import type { ModelMessage } from "ai";
 import { describe, expect, it, vi } from "vitest";
-import { createReasoningLlm } from "../src/agent-llm";
 import type { MgbaButton, MgbaStatus } from "../src/mgba-http";
 import {
   createContinuationPrompt,
@@ -17,6 +18,7 @@ import {
   streamRun,
   streamSupervisedRun,
 } from "../src/runner";
+import type { SupervisorIntervention } from "../src/supervisor";
 import { createMgbaControlPlane } from "../src/tools";
 
 class FakeRun implements AgentRun {
@@ -81,8 +83,6 @@ describe("supervised control tools", () => {
       "mgba_hold",
       "mgba_hold_many",
       "mgba_release",
-      "mgba_screenshot",
-      "mgba_status",
       "mgba_tap",
       "mgba_tap_many",
     ]);
@@ -92,13 +92,13 @@ describe("supervised control tools", () => {
     expect(tools).not.toHaveProperty("mgba_load_state");
   });
 
-  it("normalizes directional movement to duration 12 and settles to start frame plus 48", async () => {
-    const client = new FakeMgbaClient([100, 110, 147, 148]);
-    const interventions: string[] = [];
+  it("normalizes directional movement to duration 12 and settles to start frame plus 200", async () => {
+    const client = new FakeMgbaClient([100, 110, 299, 300]);
+    const interventions: SupervisorIntervention[] = [];
     const tools = createMgbaControlPlane({
       client: client as never,
       onSupervisorIntervention: (intervention) => {
-        interventions.push(intervention.reason);
+        interventions.push(intervention);
       },
     });
 
@@ -111,8 +111,51 @@ describe("supervised control tools", () => {
     expect(client.calls).toContain("hold:Up:12");
     expect(client.calls).not.toContain("hold:Up:90");
     expect(client.calls.filter((call) => call === "status")).toHaveLength(4);
-    expect(interventions).toContain("long-movement-split");
-    expect(interventions).toContain("settle-wait");
+    expect(interventions.map((intervention) => intervention.reason)).toContain(
+      "long-movement-split"
+    );
+    expect(interventions).toContainEqual(
+      expect.objectContaining({
+        polls: 3,
+        reason: "settle-wait",
+        settledFrame: 300,
+        startFrame: 100,
+        targetFrame: 300,
+      })
+    );
+  });
+
+  it("serializes concurrent model-facing controls until settle completes", async () => {
+    const client = new FakeMgbaClient([0, 50, 199, 200, 200]);
+    const tools = createMgbaControlPlane({ client: client as never });
+
+    await Promise.all([
+      executeTool(tools.mgba_hold.execute, { button: "Up", duration: 12 }),
+      executeTool(tools.mgba_hold.execute, { button: "A", duration: 6 }),
+    ]);
+
+    const statusIndexes = client.calls.reduce<number[]>(
+      (indexes, call, index) => {
+        if (call === "status") {
+          indexes.push(index);
+        }
+        return indexes;
+      },
+      []
+    );
+    const secondHoldIndex = client.calls.indexOf("hold:A:6");
+
+    expect(secondHoldIndex).toBeGreaterThan(statusIndexes[3]);
+    expect(client.calls).toEqual([
+      "status",
+      "hold:Up:12",
+      "status",
+      "status",
+      "status",
+      "status",
+      "hold:A:6",
+      "status",
+    ]);
   });
 
   it("normalizes non-directional taps to duration 6", async () => {
@@ -169,6 +212,28 @@ describe("streamSupervisedRun", () => {
     expect(
       events.filter((event) => event.type === "supervisor-intervention")
     ).toHaveLength(2);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        {
+          intervention: expect.objectContaining({
+            blackFrames: 1,
+            blackPixelRatio: 1,
+            polls: 1,
+            reason: "black-frame-wait",
+          }),
+          type: "supervisor-intervention",
+        },
+        {
+          intervention: expect.objectContaining({
+            blackFrames: 2,
+            blackPixelRatio: 1,
+            polls: 2,
+            reason: "black-frame-wait",
+          }),
+          type: "supervisor-intervention",
+        },
+      ])
+    );
   });
 
   it("stops black-frame polling at five screenshots", async () => {
@@ -364,57 +429,171 @@ describe("streamRun", () => {
   });
 });
 
-describe("createReasoningLlm retry", () => {
-  it("retries the same observation twice for transient failures and succeeds on the third attempt", async () => {
-    const history = [
-      { role: "user", content: "same observation" },
-    ] satisfies ModelMessage[];
+describe("runtime steering", () => {
+  it("steers multipart observation input at turn-start before the first model snapshot", async () => {
     const calls: ModelMessage[][] = [];
-    const responseMessages = [
-      { role: "assistant", content: [{ type: "text", text: "ok" }] },
-    ] satisfies RuntimeLlmOutput;
-    const generateTextImpl = vi.fn(({ messages }) => {
-      calls.push(messages);
-      if (calls.length < 3) {
-        return Promise.reject(
-          Object.assign(new Error("provider overloaded"), { status: 503 })
-        );
-      }
-      return Promise.resolve({ responseMessages });
-    }) as unknown as typeof generateText;
-    const llm = createReasoningLlm({
-      generateTextImpl,
-      instructions: "test",
-      model: {} as never,
-      reasoning: "provider-default",
-      sleep: async () => undefined,
-      tools: {},
+    const llm = vi.fn(({ history }) => {
+      calls.push([...history]);
+      return Promise.resolve([
+        { role: "assistant", content: [{ type: "text", text: "done" }] },
+      ] satisfies RuntimeLlmOutput);
     });
+    let session: SessionHandle;
+    const agent = await Agent.create({
+      hooks: {
+        beforeTurn: async () => {
+          await session.steer([
+            { text: "turn-start observation", type: "text" },
+            {
+              image: "data:image/png;base64,iVBORw0KGgo=",
+              mediaType: "image/png",
+              type: "image",
+            },
+          ]);
+        },
+      },
+      llm,
+    });
+    session = agent.session("test-before-turn");
+    const run = await session.send("start prompt");
+    const events: AgentEvent[] = [];
 
-    await expect(
-      llm({ history, signal: new AbortController().signal })
-    ).resolves.toBe(responseMessages);
-    expect(generateTextImpl).toHaveBeenCalledTimes(3);
-    expect(calls).toEqual([history, history, history]);
+    for await (const event of run.stream()) {
+      events.push(event);
+    }
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        { text: "start prompt", type: "user-text" },
+        expect.objectContaining({
+          input: expect.objectContaining({
+            content: [
+              expect.objectContaining({
+                text: "turn-start observation",
+                type: "text",
+              }),
+              expect.objectContaining({
+                image: "data:image/png;base64,iVBORw0KGgo=",
+                mediaType: "image/png",
+                type: "image",
+              }),
+            ],
+            type: "user-message",
+          }),
+          placement: "turn-start",
+          type: "runtime-input",
+        }),
+      ])
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContainEqual(
+      expect.objectContaining({
+        content: "start prompt",
+        role: "user",
+      })
+    );
+    expect(calls[0]).toContainEqual(
+      expect.objectContaining({
+        content: [
+          expect.objectContaining({
+            text: "turn-start observation",
+            type: "text",
+          }),
+          expect.objectContaining({
+            data: "data:image/png;base64,iVBORw0KGgo=",
+            mediaType: "image/png",
+            type: "file",
+          }),
+        ],
+        role: "user",
+      })
+    );
   });
 
-  it("fails fast for non-retryable errors", async () => {
-    const error = Object.assign(new Error("bad request"), { status: 400 });
-    const generateTextImpl = vi.fn(() =>
-      Promise.reject(error)
-    ) as unknown as typeof generateText;
-    const llm = createReasoningLlm({
-      generateTextImpl,
-      instructions: "test",
-      model: {} as never,
-      reasoning: "provider-default",
-      sleep: async () => undefined,
-      tools: {},
-    });
+  it("steers multipart screenshot input into the active run after step-end", async () => {
+    const calls: ModelMessage[][] = [];
+    const llm = vi.fn(({ history }) => {
+      calls.push([...history]);
+      if (calls.length === 1) {
+        return Promise.resolve([
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool-call",
+                toolCallId: "call-1",
+                toolName: "mgba_tap",
+                input: { button: "A" },
+              },
+            ],
+          },
+        ] satisfies RuntimeLlmOutput);
+      }
 
-    await expect(
-      llm({ history: [], signal: new AbortController().signal })
-    ).rejects.toBe(error);
-    expect(generateTextImpl).toHaveBeenCalledOnce();
+      return Promise.resolve([
+        { role: "assistant", content: [{ type: "text", text: "done" }] },
+      ] satisfies RuntimeLlmOutput);
+    });
+    const agent = await Agent.create({ llm });
+    const session = agent.session("test-steer");
+    const run = await session.send("start");
+    const events: AgentEvent[] = [];
+    let steered = false;
+
+    for await (const event of run.stream()) {
+      events.push(event);
+      if (event.type === "step-end" && !steered) {
+        steered = true;
+        await session.steer([
+          { text: "after step screenshot", type: "text" },
+          {
+            image: "data:image/png;base64,iVBORw0KGgo=",
+            mediaType: "image/png",
+            type: "image",
+          },
+        ]);
+      }
+    }
+
+    expect(steered).toBe(true);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          input: expect.objectContaining({
+            content: [
+              expect.objectContaining({
+                text: "after step screenshot",
+                type: "text",
+              }),
+              expect.objectContaining({
+                image: "data:image/png;base64,iVBORw0KGgo=",
+                mediaType: "image/png",
+                type: "image",
+              }),
+            ],
+            type: "user-message",
+          }),
+          placement: "step-end",
+          type: "runtime-input",
+        }),
+      ])
+    );
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContainEqual(
+      expect.objectContaining({
+        content: [
+          expect.objectContaining({
+            text: "after step screenshot",
+            type: "text",
+          }),
+          expect.objectContaining({
+            data: "data:image/png;base64,iVBORw0KGgo=",
+            mediaType: "image/png",
+            type: "file",
+          }),
+        ],
+        role: "user",
+      })
+    );
   });
 });

@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { MGBA_BUTTONS, type MgbaButton, type MgbaStatus } from "./mgba-http";
 import { sampleGameBoyBlackFrame } from "./screenshot-image";
-import { createScreenshotPath } from "./tools/screenshot";
+import { createScreenshotPath } from "./screenshot-path";
 
 export const DIRECTIONAL_HOLD_DURATION = 12;
 export const NON_DIRECTIONAL_TAP_DURATION = 6;
-export const POST_ACTION_SETTLE_FRAMES = 48;
+export const POST_ACTION_SETTLE_FRAMES = 200;
 export const BLACK_FRAME_MAX_POLLS = 5;
 
 const DIRECTION_BUTTONS = new Set<MgbaButton>(["Up", "Down", "Left", "Right"]);
@@ -19,8 +19,14 @@ export type SupervisorInterventionReason =
   | "timing-normalized";
 
 export interface SupervisorIntervention {
+  blackFrames?: number;
+  blackPixelRatio?: number;
   detail: string;
+  polls?: number;
   reason: SupervisorInterventionReason;
+  settledFrame?: number;
+  startFrame?: number;
+  targetFrame?: number;
 }
 
 export interface SupervisorInterventionEvent {
@@ -76,6 +82,12 @@ export function createSupervisedMgbaClient<T extends SupervisedClient>(
       if (property === "holdMany") {
         return supervisor.holdMany;
       }
+      if (property === "clear") {
+        return supervisor.clear;
+      }
+      if (property === "clearMany") {
+        return supervisor.clearMany;
+      }
       return Reflect.get(target, property, receiver);
     },
   });
@@ -101,7 +113,10 @@ export async function waitThroughBlackFrames({
     }
     blackFrames += 1;
     onIntervention?.({
+      blackFrames,
+      blackPixelRatio: sample.blackPixelRatio,
       detail: `black/loading frame ${poll} (${sample.blackPixelRatio.toFixed(4)} black pixels)`,
+      polls: poll,
       reason: "black-frame-wait",
     });
   }
@@ -123,6 +138,7 @@ class MgbaSupervisor {
   readonly #onIntervention:
     | ((intervention: SupervisorIntervention) => void)
     | undefined;
+  #controlQueue: Promise<void> = Promise.resolve();
 
   constructor(
     client: SupervisedClient,
@@ -132,103 +148,118 @@ class MgbaSupervisor {
     this.#onIntervention = onIntervention;
   }
 
-  tap = async (button: MgbaButton, signal?: AbortSignal): Promise<string> => {
-    const normalizedButton = this.#requireButton(button);
-    const startFrame = await this.#currentFrame(signal);
-    const result = isDirection(normalizedButton)
-      ? await this.#client.hold(
-          normalizedButton,
-          DIRECTIONAL_HOLD_DURATION,
-          signal
-        )
-      : await this.#client.hold(
-          normalizedButton,
-          NON_DIRECTIONAL_TAP_DURATION,
-          signal
-        );
-    this.#intervene({
-      detail: `normalized tap ${normalizedButton} to hold duration ${isDirection(normalizedButton) ? DIRECTIONAL_HOLD_DURATION : NON_DIRECTIONAL_TAP_DURATION}`,
-      reason: "timing-normalized",
+  tap = (button: MgbaButton, signal?: AbortSignal): Promise<string> =>
+    this.#runControl(async () => {
+      const normalizedButton = this.#requireButton(button);
+      const startFrame = await this.#currentFrame(signal);
+      const result = isDirection(normalizedButton)
+        ? await this.#client.hold(
+            normalizedButton,
+            DIRECTIONAL_HOLD_DURATION,
+            signal
+          )
+        : await this.#client.hold(
+            normalizedButton,
+            NON_DIRECTIONAL_TAP_DURATION,
+            signal
+          );
+      this.#intervene({
+        detail: `normalized tap ${normalizedButton} to hold duration ${isDirection(normalizedButton) ? DIRECTIONAL_HOLD_DURATION : NON_DIRECTIONAL_TAP_DURATION}`,
+        reason: "timing-normalized",
+      });
+      await this.#settle(startFrame, signal);
+      return result;
     });
-    await this.#settle(startFrame, signal);
-    return result;
-  };
 
-  tapMany = async (
+  tapMany = (
     buttons: readonly MgbaButton[],
     signal?: AbortSignal
-  ): Promise<string> => {
-    const normalizedButtons = this.#requireButtons(buttons);
-    const startFrame = await this.#currentFrame(signal);
-    const result = await this.#client.holdMany(
-      normalizedButtons,
-      NON_DIRECTIONAL_TAP_DURATION,
-      signal
-    );
-    this.#intervene({
-      detail: `normalized multi-tap ${normalizedButtons.join("+")} to hold duration ${NON_DIRECTIONAL_TAP_DURATION}`,
-      reason: "timing-normalized",
+  ): Promise<string> =>
+    this.#runControl(async () => {
+      const normalizedButtons = this.#requireButtons(buttons);
+      const startFrame = await this.#currentFrame(signal);
+      const result = await this.#client.holdMany(
+        normalizedButtons,
+        NON_DIRECTIONAL_TAP_DURATION,
+        signal
+      );
+      this.#intervene({
+        detail: `normalized multi-tap ${normalizedButtons.join("+")} to hold duration ${NON_DIRECTIONAL_TAP_DURATION}`,
+        reason: "timing-normalized",
+      });
+      await this.#settle(startFrame, signal);
+      return result;
     });
-    await this.#settle(startFrame, signal);
-    return result;
-  };
 
-  hold = async (
+  hold = (
     button: MgbaButton,
     duration: number,
     signal?: AbortSignal
-  ): Promise<string> => {
-    const normalizedButton = this.#requireButton(button);
-    const startFrame = await this.#currentFrame(signal);
-    const fixedDuration = isDirection(normalizedButton)
-      ? DIRECTIONAL_HOLD_DURATION
-      : NON_DIRECTIONAL_TAP_DURATION;
-    if (duration !== fixedDuration) {
-      this.#intervene({
-        detail: `normalized hold ${normalizedButton} duration ${duration} to ${fixedDuration}`,
-        reason:
-          isDirection(normalizedButton) && duration > fixedDuration
-            ? "long-movement-split"
-            : "timing-normalized",
-      });
-    }
-    const result = await this.#client.hold(
-      normalizedButton,
-      fixedDuration,
-      signal
-    );
-    await this.#settle(startFrame, signal);
-    return result;
-  };
+  ): Promise<string> =>
+    this.#runControl(async () => {
+      const normalizedButton = this.#requireButton(button);
+      const startFrame = await this.#currentFrame(signal);
+      const fixedDuration = isDirection(normalizedButton)
+        ? DIRECTIONAL_HOLD_DURATION
+        : NON_DIRECTIONAL_TAP_DURATION;
+      if (duration !== fixedDuration) {
+        this.#intervene({
+          detail: `normalized hold ${normalizedButton} duration ${duration} to ${fixedDuration}`,
+          reason:
+            isDirection(normalizedButton) && duration > fixedDuration
+              ? "long-movement-split"
+              : "timing-normalized",
+        });
+      }
+      const result = await this.#client.hold(
+        normalizedButton,
+        fixedDuration,
+        signal
+      );
+      await this.#settle(startFrame, signal);
+      return result;
+    });
 
-  holdMany = async (
+  holdMany = (
     buttons: readonly MgbaButton[],
     duration: number,
     signal?: AbortSignal
-  ): Promise<string> => {
-    const normalizedButtons = this.#requireButtons(buttons);
-    if (normalizedButtons.some(isDirection)) {
-      this.#intervene({
-        detail: `rejected directional multi-hold ${normalizedButtons.join("+")}`,
-        reason: "invalid-button",
-      });
-      throw new Error("Supervisor rejected directional multi-button movement");
-    }
-    const startFrame = await this.#currentFrame(signal);
-    if (duration !== NON_DIRECTIONAL_TAP_DURATION) {
-      this.#intervene({
-        detail: `normalized multi-hold ${normalizedButtons.join("+")} duration ${duration} to ${NON_DIRECTIONAL_TAP_DURATION}`,
-        reason: "timing-normalized",
-      });
-    }
-    const result = await this.#client.holdMany(
-      normalizedButtons,
-      NON_DIRECTIONAL_TAP_DURATION,
-      signal
-    );
-    await this.#settle(startFrame, signal);
-    return result;
-  };
+  ): Promise<string> =>
+    this.#runControl(async () => {
+      const normalizedButtons = this.#requireButtons(buttons);
+      if (normalizedButtons.some(isDirection)) {
+        this.#intervene({
+          detail: `rejected directional multi-hold ${normalizedButtons.join("+")}`,
+          reason: "invalid-button",
+        });
+        throw new Error(
+          "Supervisor rejected directional multi-button movement"
+        );
+      }
+      const startFrame = await this.#currentFrame(signal);
+      if (duration !== NON_DIRECTIONAL_TAP_DURATION) {
+        this.#intervene({
+          detail: `normalized multi-hold ${normalizedButtons.join("+")} duration ${duration} to ${NON_DIRECTIONAL_TAP_DURATION}`,
+          reason: "timing-normalized",
+        });
+      }
+      const result = await this.#client.holdMany(
+        normalizedButtons,
+        NON_DIRECTIONAL_TAP_DURATION,
+        signal
+      );
+      await this.#settle(startFrame, signal);
+      return result;
+    });
+
+  clear = (button: MgbaButton, signal?: AbortSignal): Promise<string> =>
+    this.#runControl(() => this.#client.clear(button, signal));
+
+  clearMany = (
+    buttons: readonly MgbaButton[],
+    signal?: AbortSignal
+  ): Promise<string> =>
+    this.#runControl(() => this.#client.clearMany(buttons, signal));
 
   async #currentFrame(signal?: AbortSignal): Promise<number | undefined> {
     const status = await this.#client.status(signal);
@@ -254,6 +285,20 @@ class MgbaSupervisor {
     return buttons.map((button) => this.#requireButton(button));
   }
 
+  async #runControl<T>(control: () => Promise<T>): Promise<T> {
+    const previous = this.#controlQueue;
+    let release: () => void = () => undefined;
+    this.#controlQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await control();
+    } finally {
+      release();
+    }
+  }
+
   async #settle(
     startFrame: number | undefined,
     signal?: AbortSignal
@@ -270,7 +315,11 @@ class MgbaSupervisor {
         if (polls > 1) {
           this.#intervene({
             detail: `settled from frame ${startFrame} to ${frame} after ${polls} polls`,
+            polls,
             reason: "settle-wait",
+            settledFrame: frame,
+            startFrame,
+            targetFrame,
           });
         }
         return;

@@ -175,6 +175,51 @@ describe("RunMetricsTracker", () => {
     );
   });
 
+  it("counts observed runtime-input before control without observation tools", () => {
+    const tracker = new RunMetricsTracker({ runId: "run-runtime-input" });
+
+    tracker.recordEvent({ type: "turn-start" }, 0);
+    tracker.recordEvent(
+      {
+        input: {
+          content: [
+            {
+              text: "Fresh observation\n\nCurrent mGBA status:\nframe: 123",
+              type: "text",
+            },
+            {
+              image: "data:image/png;base64,screen-a",
+              mediaType: "image/png",
+              type: "image",
+            },
+          ],
+          type: "user-message",
+        },
+        placement: "turn-start",
+        type: "runtime-input",
+      },
+      5
+    );
+    tracker.recordEvent(
+      {
+        input: { button: "A" },
+        toolCallId: "tap-1",
+        toolName: "mgba_tap",
+        type: "tool-call",
+      },
+      10
+    );
+
+    expect(tracker.snapshot()).toMatchObject({
+      observeBeforeActRatio: 1,
+      screenshotCalls: 0,
+      statusCalls: 0,
+      toolCalls: 1,
+      turnsWithObserveBeforeControl: 1,
+      uniqueScreenCount: 1,
+    });
+  });
+
   it("tracks stuck events in Prometheus metrics", () => {
     const tracker = new RunMetricsTracker({ runId: "run-stuck" });
 

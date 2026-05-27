@@ -12,8 +12,8 @@ importers:
         specifier: 3.0.0-canary.48
         version: 3.0.0-canary.48(zod@4.4.3)
       '@minpeter/pss-runtime':
-        specifier: ^0.0.6
-        version: 0.0.6(zod@4.4.3)
+        specifier: ^0.0.8
+        version: 0.0.8(zod@4.4.3)
       '@t3-oss/env-core':
         specifier: ^0.13.11
         version: 0.13.11(typescript@6.0.3)(zod@4.4.3)
@@ -321,8 +321,8 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@minpeter/pss-runtime@0.0.6':
-    resolution: {integrity: sha512-HmrqCmAPtX1IMSj2NrorkfvdAAbyHJI0YA6GCd3V48//w78Ozl2UP3POW/gs3EGny66L44ofQCg+nLNybxV/7w==}
+  '@minpeter/pss-runtime@0.0.8':
+    resolution: {integrity: sha512-avIeVvGJaRDeWhmv8rTCB1sNjQCgtCGb5JEO+BwvVJKoZPgdkUoesOVwDfrYJgH3W60C5hQEGuxW6fvX178gCA==}
 
   '@napi-rs/wasm-runtime@1.1.4':
     resolution: {integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==}
@@ -1109,7 +1109,7 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@minpeter/pss-runtime@0.0.6(zod@4.4.3)':
+  '@minpeter/pss-runtime@0.0.8(zod@4.4.3)':
     dependencies:
       ai: 7.0.0-canary.142(zod@4.4.3)
     transitivePeerDependencies:
