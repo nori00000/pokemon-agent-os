@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/banner.svg" alt="pss-mgba — autonomous mGBA harness" width="100%" />
+</p>
+
 # TypeScript Pokemon Harness
 
 Autonomous Pokemon gameplay harness for an already-running mGBA instance. The
