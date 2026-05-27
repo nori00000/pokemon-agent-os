@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/banner.svg" alt="pss-mgba — autonomous mGBA harness" width="100%" />
+  <img src="./assets/banner.png" alt="Which harness is the best Pokémon trainer?" width="100%" />
 </p>
 
 # TypeScript Pokemon Harness

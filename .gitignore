@@ -19,5 +19,6 @@ coverage/
 *.sav
 *.state
 *.png
+!assets/**/*.png
 
 .pss-mgba/
