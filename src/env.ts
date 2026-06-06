@@ -12,6 +12,7 @@ export const env = createEnv({
     AI_MODEL: z.string().min(1).default("gpt-5.5"),
     METRICS_HTTP_HOST: z.string().min(1).default("0.0.0.0"),
     METRICS_HTTP_PORT: z.coerce.number().int().min(1).max(65_535).default(9464),
+    STRATEGY_PROMPT_FILE: z.string().optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

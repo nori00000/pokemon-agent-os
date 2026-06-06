@@ -73,6 +73,31 @@
 - **Viridian 도달 다음 단계(NEXT)**: Route1 전용 **스캐너 보정**(`pnpm os:scan` in Route1) — 전체 미로 flood-fill로 walkable 타일·진짜 Viridian 북출구 좌표 발견 → spatial_graph 갱신 → 에이전트가 A*로 미로 완주. (단 Route1 풀숲 야생배틀 처리 + 큰 맵이라 스캔 시간 큼.) 또는 pret Route1 .blk/connection 데이터로 북출구 좌표 직접 보정.
 - **배틀 정책 추가 개선**: Route1 야생배틀은 RUN(메뉴 RUN 선택)이 빠름 — 배틀 에이전트에 wild(D057=1)면 RUN, trainer(=2)면 fight 분기 권장.
 
+### 🧭 계획 변경(2026-06-06): RAM 메모리맵 파싱 → walkability 마스크 → A* (정석 내비)
+
+**문제**: 범프(bump) 학습은 벽을 한 칸씩 부딪혀 발견 → 느리고, 매 실행 grid 리셋으로 재탐색, **미로(Route1 지그재그 절벽)에서 갇힘**(실증: y28→14에서 정체). A*의 목표좌표도 미보정이면 무의미.
+
+**해법**: 매 스텝 **RAM에서 실제 타일/충돌맵을 읽어 walkability 마스크**를 만들고 OccupancyGrid에 **선반영(pre-seed)** → A*가 첫 시도에 정확한 경로 산출(부딪힐 필요 없음).
+
+**Pokémon Red RAM 소스**:
+- `wCurMapTileset` = **0xD367** (현재 타일셋 id).
+- `wTileMap` = **0xC3A0** (화면 20×18=360바이트 타일 id; 플레이어 중심 슬라이딩 윈도우).
+- 타일셋별 **walkable 타일 리스트**: pret `data/tilesets/*_collision.asm`에서 컴파일(타일셋별 통행가능 tile id 집합).
+- 지형 보조: 풀숲(야생인카운터) 타일, **ledge(한방향 절벽)** = 일방향 엣지로 특수처리.
+
+**파이프라인(매 스텝)**:
+1. `wCurMapTileset` + `wTileMap` 읽기 → 화면 타일 id 그리드.
+2. 각 타일: walkable = (tile id ∈ 타일셋 collision 리스트) → mask.
+3. 화면좌표 → 맵좌표(플레이어 x/y + 스크롤 오프셋) 변환.
+4. OccupancyGrid에 free/blocked로 마스킹(부딪히기 전에 미리).
+5. A*가 실제 충돌맵 위에서 경로 산출 → 미로 정확 통과. 맵별 마스크 영속화.
+
+**구현 위치**: 신규 `src/agent-os/memory-map.ts` (RAM 타일 읽기 + 타일셋 collision 테이블 + 마스크 빌더), os-runner의 runStep에서 매 스텝 OccupancyGrid에 마스크 적용. `mgba-http`의 `read8` 반복 또는 `read range`(/core/readrange) 활용.
+
+**효과**: Route1(및 전 맵) 미로를 정확히 통과 → Viridian 자동 도달. 범프학습은 폴백/검증용으로 유지.
+
+**현재 등반 상태**: Route1 (10,14), y28→14 도달. 메모리맵 마스킹 도입 시 여기서 막힌 y=14 선반의 갭을 RAM으로 즉시 파악해 통과 가능.
+
 ---
 
 ## 1. 진행 상황 (Progress) — DONE ✅

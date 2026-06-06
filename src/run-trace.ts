@@ -1,5 +1,11 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  DEFAULT_EMULATOR_FPS,
+  emulatorFpsContractNote,
+  normalizeEpisodeRunConfig,
+  type EmulatorFps,
+} from "./evaluation/run-config";
 
 const TRACE_ROOT = ".pss-mgba/traces";
 const ITERATION_COUNTER_PATH = join(TRACE_ROOT, "iteration-counter.json");
@@ -22,6 +28,7 @@ export type SaveStateSupportStatus =
   | typeof SAVE_STATE_UNSUPPORTED_BY_CURRENT_MGBA_HTTP;
 
 export interface RunExperimentMetadata {
+  emulator_fps?: EmulatorFps;
   experimentId?: string;
   milestone?: string;
   milestoneCurrent?: string;
@@ -46,6 +53,7 @@ export interface RunTrace extends Partial<RunExperimentMetadata> {
 }
 
 export const OPTIMIZED_FRESH_RUN_METADATA = {
+  emulator_fps: DEFAULT_EMULATOR_FPS,
   experimentId: "combined-optimized",
   mode: "fresh",
   objective:
@@ -97,6 +105,21 @@ export async function createRunTrace(
     `${JSON.stringify(trace, null, 2)}
 `
   );
+  const config = normalizeEpisodeRunConfig({
+    emulator_fps: trace.emulator_fps ?? DEFAULT_EMULATOR_FPS,
+  });
+  await writeFile(
+    join(metricsDir, "config.json"),
+    `${JSON.stringify(config, null, 2)}
+`
+  );
+  await writeFile(
+    join(metricsDir, "debug_notes.md"),
+    `# Debug Notes
+
+- ${emulatorFpsContractNote(config)}
+`
+  );
 
   return trace;
 }
@@ -120,6 +143,14 @@ export async function updateRunTraceMetadata(
     `${JSON.stringify(next, null, 2)}
 `
   );
+  const config = normalizeEpisodeRunConfig({
+    emulator_fps: next.emulator_fps ?? DEFAULT_EMULATOR_FPS,
+  });
+  await writeFile(
+    join(trace.metricsDir, "config.json"),
+    `${JSON.stringify(config, null, 2)}
+`
+  );
   return next;
 }
 
@@ -129,6 +160,9 @@ export function validateRunExperimentMetadata(
   if (!EXPERIMENT_MODES.includes(metadata.mode)) {
     throw new Error(`Invalid experiment mode: ${String(metadata.mode)}`);
   }
+  normalizeEpisodeRunConfig({
+    emulator_fps: metadata.emulator_fps ?? DEFAULT_EMULATOR_FPS,
+  });
   if (
     metadata.saveStateStatus === "supported" &&
     (metadata.mode === "recovery" ||

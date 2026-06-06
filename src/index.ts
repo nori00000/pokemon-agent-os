@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { Agent, type SessionHandle } from "@minpeter/pss-runtime";
 import { env } from "./env";
@@ -42,6 +43,14 @@ const instructions = [
   "Track recent action context and avoid repeating actions that did not visibly change progress.",
   "Before any tool call, output exactly one <action_plan>...</action_plan> block containing the medium-term goal, visible blocked/open/object assessment, intended target, next action, and recent repetition to avoid.",
   "Keep final user-facing answers under 3 lines, but use tools whenever game control is requested.",
+  ...(env.STRATEGY_PROMPT_FILE
+    ? [
+        `Strategy directive for this run (follow it while respecting all rules above):\n${readFileSync(
+          env.STRATEGY_PROMPT_FILE,
+          "utf8"
+        ).trim()}`,
+      ]
+    : []),
 ].join("\n\n");
 const mgbaClient = new MgbaHttpClient({ baseUrl: env.MGBA_HTTP_BASE_URL });
 const tools = createMgbaControlPlane({
