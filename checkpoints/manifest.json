@@ -1,0 +1,4 @@
+{
+  "_meta": { "note": "Save-state search tree. Each checkpoint references an mGBA save-state file under checkpoints/states/. Populated at runtime by os-runner before risky transitions." },
+  "checkpoints": []
+}
