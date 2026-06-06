@@ -54,10 +54,11 @@ Reproduce the build/test guardrails locally:
 pnpm typecheck   # tsc --noEmit (+ web)
 pnpm build       # tsc -p tsconfig.json
 pnpm test        # vitest run
+npx ultracite check src/agent-os   # lint the Agent OS sources
 ```
 
 Last verified on this branch (2026-06-06): `pnpm typecheck` and `pnpm build` exit 0,
-and `pnpm test` reports **133 passing across 20 test files**. Re-run the commands above
+and `pnpm test` reports **133 passing across 20 test files**, and the Agent OS sources are lint-clean (`npx ultracite check src/agent-os`). Re-run the commands above
 to confirm.
 
 Runtime scoring uses `progress_score = mission_index×100 + map_transitions×10 +
