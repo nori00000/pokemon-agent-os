@@ -13,6 +13,65 @@ This branch is intentionally local-harness focused: Pokemon RAM reads, movement
 supervision, stuck memory, milestone scoring, screenshot processing, and run
 metrics all live here unless separate evidence proves a generic runtime need.
 
+## 🧠 Deterministic Agent OS Layer
+
+> **Hackathon submission.** A deterministic (no-LLM) control layer on top of this harness that drives Pokémon Red toward Viridian City. Principle: **RAM is the source of truth, knowledge is externalized to JSON, and movement/recovery are deterministic** (A\* over a learned occupancy grid) — instead of relying on an LLM to "remember" game state.
+
+Code lives in [`src/agent-os/`](./src/agent-os) (`game-state`, `knowledge`, `brain`, `io`, `os-runner`, `pathfinder`, `scanner`); knowledge graphs are in [`knowledge/`](./knowledge).
+
+### Run the Agent OS
+
+No API key is required — the Agent OS layer is fully deterministic.
+
+```bash
+pnpm install
+pnpm test            # runs the suite
+
+# With mGBA running, mGBASocketServer.lua loaded once (GUI: Tools -> Scripting),
+# and mGBA-http up:
+pnpm os:calibrate    # verify button -> delta(x,y) and collect real exit coordinates
+pnpm os              # run the deterministic agent loop (emits an evaluation report)
+pnpm os:scan         # flood-fill map scanner (discovers walkable tiles / exits)
+```
+
+Prerequisites are the same as the harness above (mGBA + `mGBA-http` + a legally
+obtained ROM already loaded in mGBA). Load the Lua bridge **once** per mGBA window —
+double-loading freezes the bridge.
+
+### How it works
+
+1. `game-state.ts` — normalizes RAM into a small `GameState` plus a weighted `stuck_score` and failure classification.
+2. `knowledge.ts` — loads `spatial_graph` / `mission_graph` / `failure_dex` JSON and runs BFS map routing.
+3. `pathfinder.ts` — A\* over an `OccupancyGrid` with **bump learning** (failed move -> tile blocked) and **unwanted-warp learning** (unintended map transition -> origin tile blocked).
+4. `brain.ts` — deterministic coordinator `decide()` routing to Navigation / Recovery / Battle / Dialog / Menu (no LLM in the loop).
+5. `io.ts` — runtime state, step log (`agent_steps.jsonl`), `progress_score`, and a per-run evaluation report.
+
+### How to evaluate
+
+Reproduce the build/test guardrails locally:
+
+```bash
+pnpm typecheck   # tsc --noEmit (+ web)
+pnpm build       # tsc -p tsconfig.json
+pnpm test        # vitest run
+```
+
+Last verified on this branch (2026-06-06): `pnpm typecheck` and `pnpm build` exit 0,
+and `pnpm test` reports **133 passing across 20 test files**. Re-run the commands above
+to confirm.
+
+Runtime scoring uses `progress_score = mission_index×100 + map_transitions×10 +
+unique_coords×0.1 − stuck×5 − recovery_fail×10`, written to an evaluation report on
+every `pnpm os` run.
+
+### Development log
+
+The full live-run development journey — early-game navigation, the Oak story-gate, and
+battle handling, with the RAM addresses used at each step — is tracked in
+[issue #14 (Agent OS Tracker)](../../issues/14) and milestone issues
+[#7–#13](../../issues). These are an in-progress engineering log, not final benchmark
+results.
+
 ## Requirements
 
 - Node.js 20 or newer
