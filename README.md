@@ -64,6 +64,17 @@ Runtime scoring uses `progress_score = mission_index×100 + map_transitions×10 
 unique_coords×0.1 − stuck×5 − recovery_fail×10`, written to an evaluation report on
 every `pnpm os` run.
 
+### What the tests validate
+
+The deterministic layer is covered by `tests/agent-os/agent-os.test.ts` (20 cases),
+part of the full **133-test** suite (20 files). The agent-os cases assert:
+
+- **Knowledge graph** — loads the real spatial graph, routes Pallet Town → Viridian City, resolves the first-hop exit toward a target, axis-priority direction, mission selection by live map, and failure-dex recovery sequences.
+- **Game state + stuck score** — RAM → battle-mode normalization, stuck-score thresholds (idle vs pinned-in-place), and menu-loop classification.
+- **Brain decisions** — A-mash in battle, B to close a menu, navigation toward the Route 1 exit, and lateral recovery when wall-looped.
+- **Pathfinder A\*** — steps toward an unobstructed target, routes around a blocked tile, and returns null when already at the target.
+- **I/O rendering** — `progress_score` computed per the spec weights, snake_case step-log keys, and the evaluation-report headline metrics.
+
 ### Development log
 
 The full live-run development journey — early-game navigation, the Oak story-gate, and
