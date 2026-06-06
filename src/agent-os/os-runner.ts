@@ -267,8 +267,7 @@ function learnOccupancy(
   mapKey: string | null,
   intendedNextMap: string | null
 ): void {
-  const d =
-    ls.lastAction !== null ? attemptedDelta(ls.lastAction) : null;
+  const d = ls.lastAction === null ? null : attemptedDelta(ls.lastAction);
   // unwanted warp: a move that changed the map to something other than the
   // intended next hop -> block the SOURCE tile (in the previous map) so A*
   // routes around it. Runs even when the destination map is unknown (mapKey
