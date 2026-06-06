@@ -1,0 +1,92 @@
+{
+  "_meta": {
+    "rom": "pokemon-red",
+    "first_target": "VIRIDIAN_CITY",
+    "note": "Ordered missions. The Mission Agent picks the lowest-order incomplete mission whose start_condition matches the live state. event deps are embedded as required_events/unlocks. map values are spatial_graph map keys."
+  },
+  "mission_index": {
+    "start_game": 0,
+    "leave_house": 1,
+    "oak_event": 2,
+    "choose_starter": 3,
+    "rival_battle_done": 4,
+    "route_1": 5,
+    "viridian_city": 6,
+    "parcel_received": 7,
+    "parcel_delivered": 8
+  },
+  "missions": [
+    {
+      "id": "mission_02_leave_bedroom",
+      "name": "Leave the bedroom",
+      "order": 0,
+      "start_condition": { "map": "REDS_HOUSE_2F" },
+      "success_condition": { "map": "REDS_HOUSE_1F" },
+      "preferred_subgoals": ["reach_warp:REDS_HOUSE_1F"],
+      "required_events": [],
+      "unlocks": ["leave_house"],
+      "failure_modes": ["wall_loop", "menu_loop"],
+      "recovery_policy": ["detect_stuck", "lateral_move", "reset_subgoal"]
+    },
+    {
+      "id": "mission_03_leave_house",
+      "name": "Leave the house into Pallet Town",
+      "order": 1,
+      "start_condition": { "map": "REDS_HOUSE_1F" },
+      "success_condition": { "map": "PALLET_TOWN" },
+      "preferred_subgoals": ["reach_warp:PALLET_TOWN"],
+      "required_events": [],
+      "unlocks": ["try_to_leave_pallet"],
+      "failure_modes": ["wall_loop", "failed_map_transition", "dialog_loop"],
+      "recovery_policy": ["detect_stuck", "realign_to_trigger_coordinate", "lateral_move", "reset_subgoal"]
+    },
+    {
+      "id": "mission_06b_leave_oaks_lab",
+      "name": "Leave Oak's Lab into Pallet Town",
+      "order": 1,
+      "start_condition": { "map": "OAKS_LAB" },
+      "success_condition": { "map": "PALLET_TOWN" },
+      "preferred_subgoals": ["reach_warp:PALLET_TOWN"],
+      "required_events": [],
+      "unlocks": ["try_to_leave_pallet"],
+      "failure_modes": ["wall_loop", "failed_map_transition"],
+      "recovery_policy": ["detect_stuck", "lateral_move", "reset_subgoal"]
+    },
+    {
+      "id": "mission_07_exit_pallet_town",
+      "name": "Exit Pallet Town north to Route 1",
+      "order": 2,
+      "start_condition": { "map": "PALLET_TOWN" },
+      "success_condition": { "map": "ROUTE_1" },
+      "preferred_subgoals": ["reach_exit:ROUTE_1"],
+      "required_events": [],
+      "unlocks": ["route_1"],
+      "failure_modes": ["wall_loop", "failed_map_transition", "grass_battle", "dialog_loop"],
+      "recovery_policy": ["detect_stuck", "realign_to_trigger_coordinate", "lateral_move", "backtrack_to_last_progress", "reset_subgoal"]
+    },
+    {
+      "id": "mission_08_traverse_route_1",
+      "name": "Traverse Route 1 north",
+      "order": 3,
+      "start_condition": { "map": "ROUTE_1" },
+      "success_condition": { "map": "VIRIDIAN_CITY" },
+      "preferred_subgoals": ["reach_exit:VIRIDIAN_CITY"],
+      "required_events": [],
+      "unlocks": ["viridian_city"],
+      "failure_modes": ["wall_loop", "grass_battle", "ledge_backtrack", "no_progress", "failed_map_transition"],
+      "recovery_policy": ["detect_stuck", "lateral_move", "backtrack_to_last_progress", "realign_to_trigger_coordinate", "reset_subgoal"]
+    },
+    {
+      "id": "mission_09_reach_viridian_city",
+      "name": "Reach Viridian City",
+      "order": 4,
+      "start_condition": { "map": "VIRIDIAN_CITY" },
+      "success_condition": { "map": "VIRIDIAN_CITY", "terminal": true },
+      "preferred_subgoals": ["arrived"],
+      "required_events": ["route_1"],
+      "unlocks": [],
+      "failure_modes": [],
+      "recovery_policy": []
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "_meta": {
+    "rom": "pokemon-red",
+    "source": "pret/pokered map_constants.asm (documented) + live trace confirmation",
+    "calibration_note": "map_raw_id values are documented pret constants. PALLET_TOWN=0 confirmed from .pss-mgba traces. exit/landmark coordinates are seed values and MUST be confirmed by a calibration run before relied on. `calibrated:false` means coordinates are unverified.",
+    "confirmed_map_ids_from_trace": { "PALLET_TOWN": 0, "VIRIDIAN_POKECENTER_OR_OTHER": 41 }
+  },
+  "maps": {
+    "REDS_HOUSE_2F": {
+      "map_raw_id": 38,
+      "calibrated": false,
+      "kind": "interior",
+      "landmarks": { "stairs_down": { "x": 7, "y": 1 } },
+      "exits": [
+        {
+          "to": "REDS_HOUSE_1F",
+          "type": "warp",
+          "trigger": { "x": 7, "y": 1 },
+          "target": { "map": "REDS_HOUSE_1F", "x": 7, "y": 1 }
+        }
+      ]
+    },
+    "REDS_HOUSE_1F": {
+      "map_raw_id": 37,
+      "calibrated": true,
+      "kind": "interior",
+      "landmarks": { "front_door": { "x": 2, "y": 7 }, "stairs_up": { "x": 7, "y": 1 } },
+      "exits": [
+        {
+          "to": "PALLET_TOWN",
+          "type": "warp",
+          "trigger": { "x": 2, "y": 7 },
+          "target": { "map": "PALLET_TOWN", "x": 5, "y": 5 }
+        },
+        {
+          "to": "REDS_HOUSE_2F",
+          "type": "warp",
+          "trigger": { "x": 7, "y": 1 },
+          "target": { "map": "REDS_HOUSE_2F", "x": 7, "y": 1 }
+        }
+      ]
+    },
+    "PALLET_TOWN": {
+      "map_raw_id": 0,
+      "calibrated": false,
+      "kind": "town",
+      "width": 10,
+      "height": 9,
+      "landmarks": {
+        "reds_house_door": { "x": 5, "y": 5 },
+        "blues_house_door": { "x": 13, "y": 5 },
+        "oaks_lab_door": { "x": 12, "y": 11 },
+        "north_exit": { "x": 10, "y": 0 }
+      },
+      "_note": "pret warps confirmed: REDS_HOUSE_1F=(5,5), BLUES_HOUSE=(13,5), OAKS_LAB=(12,11). North road to ROUTE_1 is at x=10 (confirmed live). IMPORTANT: the north exit is STORY-GATED — walking up at x=10 before having a starter triggers Oak's 'It's unsafe!' stop, which warps you into Oak's lab (map 40) for starter selection. Sequence: leave house -> walk north (x=10) -> Oak stops you -> lab -> choose starter -> rival battle -> THEN Route 1 (x=10) opens.",
+      "exits": [
+        {
+          "to": "ROUTE_1",
+          "type": "north_connection",
+          "calibrated": false,
+          "trigger": { "x": 10, "y": 0 },
+          "target": { "map": "ROUTE_1", "x": 10, "y": 35 }
+        },
+        {
+          "to": "REDS_HOUSE_1F",
+          "type": "warp",
+          "trigger": { "x": 5, "y": 5 },
+          "target": { "map": "REDS_HOUSE_1F", "x": 2, "y": 7 }
+        }
+      ]
+    },
+    "OAKS_LAB": {
+      "map_raw_id": 40,
+      "calibrated": true,
+      "kind": "interior",
+      "_note": "Oak's lab. Exit door at interior (4,11); pressing Down warps to Pallet at (12,12). Confirmed live.",
+      "landmarks": { "exit_door": { "x": 4, "y": 11 } },
+      "exits": [
+        {
+          "to": "PALLET_TOWN",
+          "type": "warp",
+          "trigger": { "x": 4, "y": 11 },
+          "target": { "map": "PALLET_TOWN", "x": 12, "y": 12 }
+        }
+      ]
+    },
+    "ROUTE_1": {
+      "map_raw_id": 12,
+      "calibrated": false,
+      "kind": "route",
+      "landmarks": { "south_exit": { "x": 8, "y": 35 }, "north_exit": { "x": 5, "y": 0 } },
+      "exits": [
+        {
+          "to": "PALLET_TOWN",
+          "type": "south_connection",
+          "trigger": { "x": 8, "y": 35 },
+          "target": { "map": "PALLET_TOWN", "x": 8, "y": 0 }
+        },
+        {
+          "to": "VIRIDIAN_CITY",
+          "type": "north_connection",
+          "trigger": { "x": 5, "y": 0 },
+          "target": { "map": "VIRIDIAN_CITY", "x": 24, "y": 33 }
+        }
+      ]
+    },
+    "VIRIDIAN_CITY": {
+      "map_raw_id": 1,
+      "calibrated": false,
+      "kind": "town",
+      "landmarks": { "south_exit": { "x": 24, "y": 33 } },
+      "exits": [
+        {
+          "to": "ROUTE_1",
+          "type": "south_connection",
+          "trigger": { "x": 24, "y": 33 },
+          "target": { "map": "ROUTE_1", "x": 5, "y": 0 }
+        }
+      ]
+    }
+  }
+}

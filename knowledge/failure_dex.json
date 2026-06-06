@@ -1,0 +1,33 @@
+{
+  "_meta": {
+    "note": "Failure modes for the Recovery Agent. `evidence` keys map to signals computed in game-state.ts. `recoveries` are tried in order; each names a recovery primitive implemented in brain.ts.",
+    "stuck_threshold": 0.7
+  },
+  "failures": {
+    "wall_loop": {
+      "evidence": ["same_position_count_high", "repeated_action_same_direction", "screen_hash_repeated"],
+      "threshold": 0.7,
+      "recoveries": ["forbid_repeated_direction", "try_lateral_move", "backtrack_to_last_progress", "reset_subgoal", "reload_checkpoint"]
+    },
+    "dialog_loop": {
+      "evidence": ["dialog_state_true_for_many_steps", "no_map_or_position_change"],
+      "threshold": 0.6,
+      "recoveries": ["press_A", "press_B", "wait", "detect_dialog_closed"]
+    },
+    "menu_loop": {
+      "evidence": ["menu_state_true", "no_position_change"],
+      "threshold": 0.6,
+      "recoveries": ["press_B_until_closed"]
+    },
+    "battle_loop": {
+      "evidence": ["battle_state_true_for_many_turns", "same_move_repeated_without_effect"],
+      "threshold": 0.6,
+      "recoveries": ["switch_to_battle_policy", "change_move", "use_item_if_needed"]
+    },
+    "failed_map_transition": {
+      "evidence": ["at_exit_coordinate", "map_id_not_changed", "same_transition_attempt_repeated"],
+      "threshold": 0.6,
+      "recoveries": ["step_back", "realign_to_trigger_coordinate", "retry_transition", "choose_alternative_exit", "reload_checkpoint"]
+    }
+  }
+}
