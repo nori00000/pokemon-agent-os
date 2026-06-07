@@ -13,6 +13,17 @@ This branch is intentionally local-harness focused: Pokemon RAM reads, movement
 supervision, stuck memory, milestone scoring, screenshot processing, and run
 metrics all live here unless separate evidence proves a generic runtime need.
 
+## Community Forks
+
+Excellent community forks and sibling experiments worth checking out:
+
+- [0804sally/pss-mgba](https://github.com/0804sally/pss-mgba)
+- [INONONO66/grokemon](https://github.com/INONONO66/grokemon)
+- [IYEN-AI/poke-pi](https://github.com/IYEN-AI/poke-pi)
+- [johnjheejin/ulwmon-core-260606](https://github.com/johnjheejin/ulwmon-core-260606)
+- [NomaDamas/pocketmon-harness](https://github.com/NomaDamas/pocketmon-harness)
+- [nori00000/pokemon-agent-os](https://github.com/nori00000/pokemon-agent-os)
+
 ## Requirements
 
 - Node.js 20 or newer
