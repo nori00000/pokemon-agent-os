@@ -5,6 +5,9 @@ A deterministic, structured-knowledge agent layer over the existing
 `POKEMONDEV_AGENT_OS.md`: RAM state is the truth source, game knowledge is
 externalized into JSON, navigation/recovery are deterministic, and the LLM is
 **not** in the movement path.
+<!-- DOC-SYNC: 2026-08-04 확인 — `POKEMONDEV_AGENT_OS.md`는 이 저장소 어디에도 존재하지 않음(전체 리포 검색 확인, MISSING_SOURCE). `docs/AGENT_OS_TRACKER.md`의 스냅샷 헤더에 따르면 최초 작성 당시 다른 머신(m4-air)의 `~/Downloads/POKEMONDEV_AGENT_OS.md`를 가리켰던 외부 스펙 문서로, 이 클론에는 포함되어 있지 않다. 이 파일을 그대로 참고하려는 사람은 원본을 별도로 확보해야 하며, 리포 내 실제 구현 근거는 아래 "Source modules" 절과 `knowledge/*.json`이다. -->
+<!-- DOC-SYNC: 2026-08-04 재확인 — `memory-map.ts`의 unwired 상태(line 37 주석)는 2026-08-04 기준 `grep -rn "memory-map" src/ tests/`로 재검증, 여전히 아무 곳에서도 import되지 않음(변동 없음). -->
+
 
 ## Why a second runner?
 
@@ -29,9 +32,12 @@ deterministic planners and keeps full per-step logs + an evaluation report.
 
 - `game-state.ts` — `normalizeGameState`, weighted `computeStuckScore` (§12), `classifyFailure`.
 - `knowledge.ts` — JSON loaders + pure graph ops: `findMapRoute` (BFS), `nextExitToward`, `directionToTarget`, `selectMission`.
+- `pathfinder.ts` — A\* over an `OccupancyGrid`, with bump learning (failed move → tile blocked) and unwanted-warp learning (unintended map transition → origin tile blocked).
 - `brain.ts` — deterministic Coordinator `decide()` → Navigation / Recovery / Battle / Dialog / Menu (§15.1).
 - `io.ts` — runtime-state writer, step-log appender, `computeProgressScore` (§17), evaluation report renderer (§19).
 - `os-runner.ts` — live loop (`runDeterministic`) + `runCalibration`.
+- `scanner.ts` — flood-fill map scanner (`pnpm os:scan`) that reuses the `OccupancyGrid`/A* to discover walkable tiles and exits.
+- `memory-map.ts` — RAM tilemap (`wTileMap`/`wCurMapTileset`) → per-tileset walkability mask builder for `OccupancyGrid`. <!-- DOC-SYNC: 2026-07-14 확인 — 구현은 존재하나 os-runner를 포함해 어디에서도 import되지 않는 미배선(unwired) 초안 모듈, 전용 테스트 없음. -->
 - `index.ts` — CLI entry.
 
 ## Running (calibration-first)
@@ -66,8 +72,8 @@ The spatial-graph coordinates are seeded from documented pret/pokered map IDs
 ## Env knobs
 
 - `MGBA_HTTP_BASE_URL` (from `.env`) — emulator bridge.
-- `AGENT_OS_MAX_STEPS` (default 400), `AGENT_OS_SETTLE_MS` (default 260),
-  `AGENT_OS_TARGET` (default `VIRIDIAN_CITY`).
+- `AGENT_OS_MAX_STEPS` (default 400), `AGENT_OS_SETTLE_MS` (default 120),
+  `AGENT_OS_TARGET` (default `VIRIDIAN_CITY`). <!-- DOC-SYNC: 2026-07-15 수정 — `src/agent-os/index.ts`의 `intArg("AGENT_OS_SETTLE_MS", 120)` 실측 기준 260→120 정정. -->
 
 ## Status / deferred
 

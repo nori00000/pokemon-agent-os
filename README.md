@@ -4,6 +4,9 @@
 
 # TypeScript Pokemon Harness
 
+[![CI](https://github.com/nori00000/pokemon-agent-os/actions/workflows/ci.yml/badge.svg)](https://github.com/nori00000/pokemon-agent-os/actions/workflows/ci.yml)
+<!-- DOC-SYNC: 2026-07-16 추가 — `.github/workflows/ci.yml`(push/PR on main: typecheck + test)가 이 문서 어디에도 언급되지 않아 배지만 추가. CI는 `pnpm check`(lint)를 실행하지 않음 — 아래 Verification 절의 DOC-SYNC 주석 참고. -->
+
 Autonomous Pokemon gameplay harness for an already-running mGBA instance. The
 agent controls the emulator through `mGBA-http`, receives a fresh observed state
 at the start of every turn, and records enough trace/metric data to compare
@@ -17,7 +20,7 @@ metrics all live here unless separate evidence proves a generic runtime need.
 
 > **Hackathon submission.** A deterministic (no-LLM) control layer on top of this harness that drives Pokémon Red toward Viridian City. Principle: **RAM is the source of truth, knowledge is externalized to JSON, and movement/recovery are deterministic** (A\* over a learned occupancy grid) — instead of relying on an LLM to "remember" game state.
 
-Code lives in [`src/agent-os/`](./src/agent-os) (`game-state`, `knowledge`, `brain`, `io`, `os-runner`, `pathfinder`, `scanner`); knowledge graphs are in [`knowledge/`](./knowledge).
+Code lives in [`src/agent-os/`](./src/agent-os) (`game-state`, `knowledge`, `brain`, `io`, `os-runner`, `pathfinder`, `scanner`, `memory-map`); knowledge graphs are in [`knowledge/`](./knowledge).
 
 ### Run the Agent OS
 
@@ -45,6 +48,9 @@ double-loading freezes the bridge.
 3. `pathfinder.ts` — A\* over an `OccupancyGrid` with **bump learning** (failed move -> tile blocked) and **unwanted-warp learning** (unintended map transition -> origin tile blocked).
 4. `brain.ts` — deterministic coordinator `decide()` routing to Navigation / Recovery / Battle / Dialog / Menu (no LLM in the loop).
 5. `io.ts` — runtime state, step log (`agent_steps.jsonl`), `progress_score`, and a per-run evaluation report.
+6. `memory-map.ts` — reads the on-screen RAM tilemap (`wTileMap`/`wCurMapTileset`) into a per-tileset walkability mask for `OccupancyGrid`. <!-- DOC-SYNC: 2026-07-14 확인 — 코드는 존재하고 typecheck/build/lint을 통과하지만, `src/agent-os/os-runner.ts`를 포함해 어디에서도 import되지 않고 전용 유닛 테스트도 없음(grep 확인). 배선되지 않은 초안(draft) 모듈로 취급할 것. -->
+7. `os-runner.ts` — live loop (`runDeterministic`, driven by `pnpm os`) plus `runCalibration` (`pnpm os:calibrate`); wires `game-state`/`knowledge`/`pathfinder`/`brain`/`io` together.
+8. `scanner.ts` — flood-fill map scanner (`pnpm os:scan`) that reuses the `OccupancyGrid`/A\* to discover walkable tiles and exits. <!-- DOC-SYNC: 2026-08-09 추가 — 위 모듈 인벤토리(23행)와 `src/agent-os/README.md`에는 있었지만 이 "How it works" 번호 목록에는 `os-runner.ts`/`scanner.ts`가 빠져 있었음(UNDOCUMENTED, LOW). 소스 확인 후 추가. -->
 
 ### How to evaluate
 
@@ -109,6 +115,10 @@ METRICS_HTTP_HOST=0.0.0.0
 METRICS_HTTP_PORT=9464
 ```
 
+<!-- DOC-SYNC: 2026-08-05 추가 — `src/env.ts`의 `STRATEGY_PROMPT_FILE`(optional)이 위 예시·`.env.example`에는 없지만 `src/index.ts`/`src/episode-main.ts` 둘 다에서 실제로 읽는다(UNDOCUMENTED, LOW — 미설정 시 기본 지시문과 100% 동일하게 동작해 안전하지만 이 섹션 어디에도 이름이 없었음). 설정 시 해당 경로의 파일 내용을 기본 지시문 뒤에 덧붙인다. 자세한 사용례(다중 인스턴스 전략 주입)는 `multi/README.md` §"동작 원리" 참고. -->
+Optional: set `STRATEGY_PROMPT_FILE=/path/to/strategy.md` to append extra
+instructions to the base prompt; unset behaves identically to the base prompt.
+
 Start mGBA and `mGBA-http` separately, then run the harness:
 
 ```bash
@@ -139,6 +149,28 @@ Each turn:
 There is no CLI prompt, `--loop` flag, max-turn stop condition, or completion
 marker. Stop the process with `Ctrl-C` when the experiment window ends.
 
+## Episode Runner (Evaluation Harness)
+
+<!-- DOC-SYNC: 2026-07-14 추가 — package.json의 `pnpm episode`(`src/episode-main.ts`)가 이전까지 루트 README 어디에도 문서화되어 있지 않았음(구 문서 3종은 dangling reference로 이미 docs/archive/로 이동됨). 아래는 소스 코드 실측 기반 최소 설명. -->
+
+Unlike the open-ended `pnpm dev` loop above, `pnpm episode` (`src/episode-main.ts`)
+runs a bounded, evaluated episode: `EpisodeRunner` (`src/evaluation/episode-runner.ts`)
+drives the same mGBA control plane through `InputGate`/`SessionState`/`Supervisor`
+(`src/session/`) and `CommandExecutor` (`src/executor/command-executor.ts`, executes
+only the first queued `GameCommand` per step and reports the rest as `ignored`),
+stops on a hard failure, max-steps limit, or reaching Viridian
+City (`mapId === 1`), and prints a JSON result plus JSONL evidence via
+`EvidenceRecorder`. Config comes from `src/evaluation/run-config.ts`
+(`normalizeEpisodeRunConfig`). Each step's before/after state is classified by
+`src/session/transition-detector.ts` (`detectTransition`: `map` / `mode` /
+`movement` / `none`) and scored by `src/evaluation/reward.ts`
+(`calculateTransitionReward`, returns a `RewardBreakdown` with per-category
+components and a `reward_total`); the breakdown is appended to a `reward_logs`
+JSONL evidence stream via `EvidenceRecorder`. This path is covered by
+`tests/episode-runner.test.ts`.
+<!-- DOC-SYNC: 2026-07-27 추가 — `src/executor/command-executor.ts`(`CommandExecutor`)가 episode 경로에서 실제로 per-step 실행을 맡지만(episode-main.ts에서 `new CommandExecutor(inputGate)`) 이 절 어디에도 이름이 없었음(UNDOCUMENTED, LOW). 소스 확인: `executeOne()`은 큐의 첫 `GameCommand`만 실행하고 나머지는 `ignored`로 반환. `pnpm dev` 루프의 "한 턴 한 액션" 강제(`src/agent/command-agent-runner.ts`, 이벤트 스트림 필터링)와는 별개의 독립 메커니즘 — 혼동 방지를 위해 구분 명시. -->
+<!-- DOC-SYNC: 2026-07-20 수정 — 위 3문장은 `EpisodeRunner` 클래스 자체의 능력(생성자가 `isSuccess`/`isHardFailure` 콜백을 모두 받고, 둘 다 기본값은 `() => false`)을 정확히 서술하지만, 실제 `pnpm episode` 진입점인 `src/episode-main.ts`의 `createProductionEpisodeRunner()`(line 92-106)는 `isSuccess: isViridianCitySuccess`(`transition.to?.mapId === 1`)만 넘기고 **`isHardFailure`는 넘기지 않는다** — 즉 production 실행은 기본값(`() => false`)이 그대로 적용되어 "hard failure" 정지 조건이 배선되지 않았다(`src/evaluation/episode-runner.ts` line 109 기본값 확인). `tests/episode-runner.test.ts:266`은 `isHardFailure`를 넘기는 예를 보여주지만 이는 클래스 단위 테스트일 뿐, production 배선을 검증하지 않는다. 따라서 현재 `pnpm episode`는 실제로 **성공(Viridian 도달) 또는 max-steps(기본 2000, `EPISODE_MAX_STEPS`)로만 멈추고, hard-failure로는 멈추지 않는다**. -->
+
 ## Control Plane
 
 The model can use these tools:
@@ -158,6 +190,16 @@ directional movement to one tile, normalizes non-directional taps, rejects unsaf
 directional multi-holds, waits for post-action settle frames, and polls through
 short black/loading frames before the next observation.
 
+<!-- DOC-SYNC: 2026-07-19 추가 — 도구 자체는 `src/tools/` (`tap.ts`/`hold.ts`/`release.ts`)에 구현되어 있고, 위 어디에도 파일 경로가 없었음(다른 섹션들은 소스 경로를 명시하는 스타일). `src/agent/mode-gated-tool-factory.ts`가 세션 모드별로 노출 도구를 게이팅하고, `src/agent/command-agent-runner.ts`가 턴당 하나의 게임 액션만 통과시킨다(둘 다 소스 확인). -->
+Implementation: `src/tools/` (tool factories), `src/agent/mode-gated-tool-factory.ts`
+(mode-based tool gating), `src/agent/command-agent-runner.ts` (enforces one game
+action per turn).
+
+<!-- DOC-SYNC: 2026-08-14 추가 — 바로 위 "local supervisor" 문단(정규화/settle-frame 대기/black-frame 폴링)이 서술하는 구현체 자체(`src/supervisor.ts`: `DIRECTIONAL_HOLD_DURATION`, `POST_ACTION_SETTLE_FRAMES`, `BLACK_FRAME_MAX_POLLS`, `waitThroughBlackFrames`)와 이를 `pnpm dev` 루프에 배선하는 `src/runner.ts`(`streamSupervisedRun`, `src/index.ts`가 import)가 이 문서 어디에도 파일 경로로 언급되어 있지 않았음(UNDOCUMENTED, LOW — 개념은 이미 서술돼 있고 코드도 정상 동작, 경로 인용만 누락). 소스 확인: `src/supervisor.ts`는 `src/runner.ts`/`src/index.ts`/`src/episode-main.ts`/`src/tools/*`/`src/evaluation/episode-runner.ts`/`src/session/input-gate.ts` 등 8개 파일에서 import되는 핵심 공유 모듈. -->
+Implementation: `src/supervisor.ts` (normalization, settle-frame wait, black-frame
+poll) and `src/runner.ts` (`streamSupervisedRun`, wired into the `pnpm dev` loop via
+`src/index.ts`).
+
 ## Observation And Progress Signals
 
 The harness combines visual and state signals:
@@ -171,6 +213,9 @@ The harness combines visual and state signals:
   recovery attempts so the prompt can avoid blind repetition.
 - `src/pokemon-milestones.ts` scores coarse progress milestones such as player
   control reached, first map transition, and battle detected/completed.
+- `src/game/map-memory.ts` — a `MapMemory` class that records per-map tile kinds
+  (`blocked`/`door`/`grass`/`npc`/`unknown`/`walkable`/`warp`/`water`) and builds a
+  `walkabilityGrid()`. <!-- DOC-SYNC: 2026-07-17 추가 — 이 클래스는 `tests/map-memory.test.ts` 외 어디에서도 import되지 않음(grep 확인). `src/agent-os/memory-map.ts`(위 Agent OS 절, 이미 unwired로 표시됨)와는 별개의, 이것도 배선되지 않은 초안 모듈. 두 모듈 다 os-runner에 연결되지 않은 상태. -->
 
 The current RAM map is Pokemon Red oriented. Do not interpret those state fields
 as authoritative for another ROM unless separate validation proves they match.
@@ -236,6 +281,8 @@ Run the full guardrail before accepting changes or experiment evidence:
 pnpm typecheck && pnpm test && pnpm build && pnpm check
 ```
 
+<!-- DOC-SYNC: STALE — `pnpm check`(ultracite/biome)는 lint 부채로 실패한다: 이 저장소 `.gitignore`가 `.omc/`를 누락해 OMC 세션 상태 파일이 작업 디렉터리에 있으면 biome 스캔에 포함되기 때문(포함 시 34건, `.omc/` 격리 시 코드베이스 고유 부채는 26건·92 files·12파일 — useAwait·noUselessUndefined·noNestedTernary·noUnusedImports·useTopLevelRegex·organizeImports). `.github/workflows/ci.yml`은 `pnpm check`를 실행하지 않으므로 CI green과 무관. 자동수정(`pnpm fix`)·`.gitignore`에 `.omc/` 추가는 doc-sync 범위 밖(사용자 판단) (최초 2026-08-12, 최종확인 2026-08-25) -->
+
 Useful focused commands while iterating:
 
 ```bash
@@ -244,8 +291,15 @@ pnpm test -- tests/screenshot-image.test.ts tests/run-metrics.test.ts tests/metr
 pnpm test -- tests/viewer-events.test.ts tests/viewer-server.test.ts
 pnpm web:typecheck
 pnpm web:build
+pnpm web:preview
 pnpm trace:report
+pnpm check:session-authority
+pnpm fix
 ```
+
+<!-- DOC-SYNC: 2026-08-05 추가 — `pnpm web:preview`(`vite preview`)와 `pnpm fix`(`ultracite fix`, 위 34건 오류 중 일부의 FIXABLE 표시분을 자동수정)가 package.json에는 있었지만 이 문서 어디에도 없었음(UNDOCUMENTED, LOW). `pnpm fix`를 실행하면 lint 상태가 바뀌므로 위 34건 재확인 주석과 어긋나지 않도록 doc-sync 범위에서는 실행하지 않고 명령만 추가. -->
+
+<!-- DOC-SYNC: 2026-07-15 추가 — `pnpm check:session-authority` (`scripts/check-session-authority.ts`)가 package.json에는 있었지만 이 문서 어디에도 없었음. tap/hold/clear 등 저수준 입력 호출과 모드-게이팅 권한(`ModeGatedToolFactory`/`isToolAllowedForMode`), readiness-polling 내부 상태를 지정된 파일 목록 밖에서 쓰면 실패하는 아키텍처 가드레일. 현재 통과 확인됨(`session authority check passed`). -->
 
 Connectivity probe before a live run:
 

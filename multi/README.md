@@ -1,5 +1,7 @@
 # 여러 전략 동시 실행 (multi)
 
+<!-- DOC-SYNC: 2026-07-15 확인 — 아래 예시와 `multi/lib.sh`의 `REPO="$HOME/Desktop/pss-mgba"`는 이 저장소의 옛 경로/이름을 하드코딩하고 있음. 현재 클론 경로는 `/Users/leesangmin/Projects/pokemon-agent-os`(GitHub 원격도 `nori00000/pokemon-agent-os`)이고 `~/Desktop/pss-mgba`는 이 머신에 존재하지 않음(MISSING_SOURCE). `multi/setup.sh|start.sh|stop.sh`를 실제로 쓰려면 `multi/lib.sh`의 `REPO`를 현재 클론 경로로 고치거나 스크립트 위치 기준 상대경로로 바꿔야 함 — 어느 쪽이 맞는지는 사용자 판단 필요해 코드 자동수정은 보류. -->
+
 같은 모델로 **서로 다른 전략 프롬프트 3개**를 각각의 에뮬레이터에서 동시에
 돌려 비교하기 위한 도구 모음입니다.
 

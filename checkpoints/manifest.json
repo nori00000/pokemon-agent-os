@@ -1,4 +1,4 @@
 {
-  "_meta": { "note": "Save-state search tree. Each checkpoint references an mGBA save-state file under checkpoints/states/. Populated at runtime by os-runner before risky transitions." },
+  "_meta": { "note": "Save-state search tree. Each checkpoint references an mGBA save-state file under checkpoints/states/. DOC-SYNC 2026-08-02: this note previously claimed 'Populated at runtime by os-runner before risky transitions', but no source file under src/ reads or writes this manifest (grep-confirmed) and checkpoints/states/ does not exist yet -- treat as an unwired stub seed, not an active runtime output." },
   "checkpoints": []
 }

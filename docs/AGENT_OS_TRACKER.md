@@ -3,6 +3,7 @@
 > 목적(Purpose): 데이터·블로커·투두·다음액션을 한 곳에. 단계별로(step-by-step) 진행.
 > 작업 머신: m4-air (16GB). 코드: `~/Desktop/pss-mgba/src/agent-os/`.
 > 스펙(Spec): `~/Downloads/POKEMONDEV_AGENT_OS.md`.
+<!-- DOC-SYNC: 2026-07-17 확인 — 위 "작업 머신"·경로는 이 파일 최초 작성 시점(m4-air, ~/Desktop/pss-mgba) 스냅샷. 현재 클론 경로는 `/Users/leesangmin/Projects/pokemon-agent-os`(호스트 `m4-studio`, 실측 `hostname -s`)이며 `~/Desktop/pss-mgba`는 이 머신에 없음(MISSING_SOURCE, multi/README.md의 기존 DOC-SYNC 주석과 동일 근거). 아래 §0 이하는 이슈 #14를 미러링하는 append-only 로그라 원문 보존, 헤더만 참고용으로 정정. -->
 
 ---
 
@@ -99,6 +100,8 @@
 **현재 등반 상태**: Route1 (10,14), y28→14 도달. 메모리맵 마스킹 도입 시 여기서 막힌 y=14 선반의 갭을 RAM으로 즉시 파악해 통과 가능.
 
 ---
+
+<!-- DOC-SYNC: 2026-07-14 확인 — 아래 §1~§4("실측 데이터"·"블로커 #1: 입력 브리지 미적용/오크 인트로 정지"·TODO의 "오크 인트로 통과"·"좌표 보정" 미체크)는 위 iter-1~iter-7(2026-06-06) 돌파 이전 시점의 스냅샷으로 보이며, 이후 이터레이션(입력 브리지 복구·오크 통과·스타터 획득·좌표 보정 완료)과 내용이 어긋난다. 이슈 #14를 그대로 미러링한 append-only 로그라 원문은 보존하고, 최신 상태는 위 "⭐ 라이브 돌파" 절과 루트 README §Deterministic Agent OS Layer를 따를 것. 단 §3의 ISSUE #2~#4(동시 실행 충돌, `multi/start.sh`의 `--script` 의존, Agent OS의 cwd 의존)는 재확인 결과 코드상 여전히 유효(`multi/start.sh:24`에 `--script` 잔존 확인). -->
 
 ## 1. 진행 상황 (Progress) — DONE ✅
 
