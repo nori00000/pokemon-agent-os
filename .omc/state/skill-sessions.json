@@ -1,0 +1,20 @@
+{
+  "sessions": {
+    "f679ee69-453b-4328-9935-6212d05c25c3": {
+      "injectedPaths": [
+        "/Users/leesangmin/.claude/skills/omc-learned/debug-hypothesis-reset/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/tool-scope-matrix/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/advisor-executor-split/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/keyword-first/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/commit-style-detect/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/grok-trio/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/auto-checkin/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/auto-checkout/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/verify-production-fix/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/ouroboros-drift/SKILL.md",
+        "/Users/leesangmin/.claude/skills/omc-learned/auto-retrospective/SKILL.md"
+      ],
+      "timestamp": 1783908219662
+    }
+  }
+}

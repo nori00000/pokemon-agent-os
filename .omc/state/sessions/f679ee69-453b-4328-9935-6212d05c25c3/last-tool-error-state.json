@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd /Users/leesangmin/claude-code-setup && echo \\\"===OWNERSHIP.md===\\\" && cat OWNERSHIP.md && echo \\\"===CONFIG===\\\" && git config --get remote.origin.url && echo \\\"pull.rebase:\\\" && git con...",
+  "error": "Exit code 1\n===OWNERSHIP.md===\n# OWNERSHIP\n\n- **role**: platform\n- **layer**: 1\n- **tier**: B\n- **owner**: self\n- **status**: overinvestment-watch\n- **depends_on**: [dev-retrospective]\n- **produces**: portable Claude Code environment bootstrap across Macs, for self, on new-machine setup\n- **revenue_link**: none\n- **last_review**: 2026-06-20\n- **notes**: bootstrap-mac.sh installs Claude Code + OMC + tmux + deny-destructive hook + cl/clp/clr/clf/cli shell functions in one shot. Re-run with dev-set...",
+  "timestamp": "2026-07-13T02:00:37.299Z",
+  "retry_count": 2
+}

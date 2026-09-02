@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "entries": {
+    "79a93d4a2f8f50b95f852280616242fee1855dc99a3c75211917f55e72e95fae": {
+      "last_emitted_at_ms": 1783908603280,
+      "message": "Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
+    },
+    "445ed27a3872b681d98190bae61ccb84954e1bc4e140df5370be958dee776b3a": {
+      "last_emitted_at_ms": 1783908399963,
+      "message": "Verify changes work after editing. Test functionality before marking complete."
+    },
+    "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
+      "last_emitted_at_ms": 1783908299916,
+      "message": "Read multiple files in parallel when possible for faster analysis."
+    },
+    "532b8c17c3e89b7495a7eacf5c08d5b166b5ac88ab302e05d4dbca296767dbc4": {
+      "last_emitted_at_ms": 1783908015678,
+      "message": "Spawning agent: oh-my-claudecode:executor (opus) | Task: claude-code-setup 동기화 정리"
+    },
+    "e0e1be0b8ec6fbefaaa9936c6c75582e5445a5bf6f8d2732c45781d5ac4f4d27": {
+      "last_emitted_at_ms": 1783908006982,
+      "message": "Spawning agent: oh-my-claudecode:executor (opus) | Task: codex-setup dirty 정리 분석+커밋"
+    },
+    "c590f2f7507316894f506008a066f6fbb4c2aac4176ce58aac4489d823973ce0": {
+      "last_emitted_at_ms": 1783907996528,
+      "message": "Spawning agent: oh-my-claudecode:executor (opus) | Task: connection-designer 경량 패스"
+    },
+    "a552a51d8df8f97d8625e5c7e10f81087ad3e75d9327f33ff65a41be1e90cddc": {
+      "last_emitted_at_ms": 1783907990029,
+      "message": "Spawning agent: oh-my-claudecode:executor (opus) | Task: frontend-design-system 위생 패스"
+    },
+    "08913d07f7ab5d84e79e362f29dd11a4ce6570e464244061e3ec81747b68726a": {
+      "last_emitted_at_ms": 1783907981486,
+      "message": "Spawning agent: oh-my-claudecode:executor (opus) | Task: pokemon-agent-os 베이스라인+위생"
+    },
+    "07cc678457d61428e4ccaf294585d929590374b0e5360ceb5966d014e6abe2e0": {
+      "last_emitted_at_ms": 1783907971556,
+      "message": "Spawning agent: oh-my-claudecode:executor (opus) | Task: contract-forge 진단+리팩토링"
+    }
+  },
+  "updated_at": "2026-07-13T02:10:03.280Z"
+}
