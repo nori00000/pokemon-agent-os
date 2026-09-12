@@ -83,6 +83,26 @@ describe("run summary metrics", () => {
     );
   });
 
+  it("skips a partially created run directory without changing completed summaries", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pss-mgba-summary-partial-"));
+    const runsDir = join(root, "runs");
+    await writeRun(runsDir, "complete-first", 1, [100]);
+    await mkdir(join(runsDir, "still-starting"), { recursive: true });
+    await writeRun(runsDir, "complete-second", 2, [60]);
+
+    const summaries = await readRunSummaries(runsDir);
+
+    expect(summaries).toHaveLength(2);
+    expect(summaries.map((summary) => summary.runId)).toEqual([
+      "complete-first",
+      "complete-second",
+    ]);
+    expect(summaries[1]).toMatchObject({
+      avgTokensSavedVsPrevious: 40,
+      totalTokensSavedVsPrevious: 40,
+    });
+  });
+
   it("preserves experiment metadata and labels recovery runs distinctly", async () => {
     const root = await mkdtemp(join(tmpdir(), "pss-mgba-summary-metadata-"));
     const runsDir = join(root, "runs");
