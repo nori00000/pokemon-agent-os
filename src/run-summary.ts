@@ -112,9 +112,17 @@ async function readRawRunSummary(
   runsDir: string,
   runId: string
 ): Promise<RawRunSummary | null> {
-  const run = JSON.parse(
-    await readFile(join(runsDir, runId, "run.json"), "utf8")
-  ) as { iteration: number; runId: string } & Partial<RunExperimentMetadata>;
+  let run: { iteration: number; runId: string } & Partial<RunExperimentMetadata>;
+  try {
+    run = JSON.parse(
+      await readFile(join(runsDir, runId, "run.json"), "utf8")
+    ) as { iteration: number; runId: string } & Partial<RunExperimentMetadata>;
+  } catch (error) {
+    if (error instanceof Error && hasCode(error, "ENOENT")) {
+      return null;
+    }
+    throw error;
+  }
   const usageJsonl = await readFile(
     join(runsDir, runId, "token-usage.jsonl"),
     "utf8"
